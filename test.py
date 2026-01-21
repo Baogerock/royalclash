@@ -38,8 +38,12 @@ def get_window_rect(title: str):
     hwnd = win32gui.FindWindow(None, title)
     if not hwnd:
         return None
-    # 返回 (left, top, right, bottom)
-    return win32gui.GetWindowRect(hwnd)
+    # 返回客户端区域 (left, top, right, bottom)
+    left, top = win32gui.ClientToScreen(hwnd, (0, 0))
+    right, bottom = win32gui.ClientToScreen(
+        hwnd, win32gui.GetClientRect(hwnd)[2:4]
+    )
+    return left, top, right, bottom
 
 
 class Overlay(QMainWindow):

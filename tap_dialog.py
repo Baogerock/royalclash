@@ -102,11 +102,13 @@ class TapDialog(QDialog):
 
     def on_record_toggle(self):
         if self.recording:
-            self._stop_recording()
+            self.stop_recording()
         else:
-            self._start_recording()
+            self.start_recording()
 
-    def _start_recording(self):
+    def start_recording(self):
+        if self.recording:
+            return
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         remote_path = f"/sdcard/record_{timestamp}.mp4"
         cmd = (
@@ -124,7 +126,9 @@ class TapDialog(QDialog):
         self.recording = True
         self.record_btn.setText("停止录制")
 
-    def _stop_recording(self):
+    def stop_recording(self):
+        if not self.recording:
+            return
         if self.record_pid is None or self.record_remote_path is None:
             QMessageBox.warning(self, "录制失败", "录制状态异常。")
             return

@@ -4,6 +4,7 @@ from ppadb.client import Client as AdbClient
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
+from auto_record import AutoRecorder
 from tap_dialog import DEVICE, get_wm_size, TapDialog
 from video_window import start_scrcpy, MarkerOverlay
 
@@ -26,6 +27,9 @@ def main():
 
     dialog = TapDialog(device, emu_w, emu_h, overlay)
     dialog.show()
+
+    auto_recorder = AutoRecorder(device, dialog)
+    auto_recorder.start()
     sys.exit(app.exec())
 
 

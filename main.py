@@ -28,8 +28,8 @@ def main():
     dialog = TapDialog(device, emu_w, emu_h, overlay)
     dialog.show()
 
-    auto_recorder = AutoRecorder(device, dialog)
-    auto_recorder.start(interval_ms=500)
+    auto_recorder = AutoRecorder(device, dialog, overlay)
+    auto_recorder.start(interval_ms=1000)
     sys.exit(app.exec())
 
 

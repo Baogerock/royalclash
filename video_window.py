@@ -41,6 +41,7 @@ class MarkerOverlay(QMainWindow):
         self.emu_h = emu_h
         self.rect_scrcpy = None
         self.marker_pos = None
+        self.match_rect = None
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -72,6 +73,13 @@ class MarkerOverlay(QMainWindow):
         self.marker_pos = QPointF(x, y)
         self.update()
 
+    def set_match_rect(self, x, y=None, w=None, h=None):
+        if x is None:
+            self.match_rect = None
+        else:
+            self.match_rect = (x, y, w, h)
+        self.update()
+
     def _map_from_emulator(self, pos: QPointF):
         scale = self.devicePixelRatioF()
         w = self.width() * scale
@@ -88,23 +96,37 @@ class MarkerOverlay(QMainWindow):
         return QPointF(x / scale, y / scale)
 
     def paintEvent(self, e):
-        if not self.rect_scrcpy or not self.marker_pos:
+        if not self.rect_scrcpy:
             return
         p = QPainter(self)
-        pen = QPen()
-        pen.setWidth(3)
-        p.setPen(pen)
-        center = self._map_from_emulator(self.marker_pos)
-        size = 12
-        p.drawLine(
-            center.x() - size,
-            center.y(),
-            center.x() + size,
-            center.y(),
-        )
-        p.drawLine(
-            center.x(),
-            center.y() - size,
-            center.x(),
-            center.y() + size,
-        )
+        if self.marker_pos:
+            pen = QPen()
+            pen.setWidth(3)
+            p.setPen(pen)
+            center = self._map_from_emulator(self.marker_pos)
+            size = 12
+            p.drawLine(
+                center.x() - size,
+                center.y(),
+                center.x() + size,
+                center.y(),
+            )
+            p.drawLine(
+                center.x(),
+                center.y() - size,
+                center.x(),
+                center.y() + size,
+            )
+
+        if self.match_rect:
+            x, y, w, h = self.match_rect
+            scale = self.devicePixelRatioF()
+            pen = QPen(Qt.red)
+            pen.setWidth(2)
+            p.setPen(pen)
+            p.drawRect(
+                int(x / scale),
+                int(y / scale),
+                int(w / scale),
+                int(h / scale),
+            )

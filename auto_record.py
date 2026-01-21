@@ -1,46 +1,65 @@
-import io
-import time
+import os
 
-from PIL import Image
-import pytesseract
+import cv2
+import numpy as np
+from PIL import ImageGrab
 from PySide6.QtCore import QTimer
+
+from video_window import SCRCPY_TITLE, get_window_rect
 
 
 class AutoRecorder:
-    def __init__(self, device, dialog):
+    def __init__(self, device, dialog, overlay, template_path="trophy.png"):
         self.device = device
         self.dialog = dialog
-        self.cooldown_start_until = 0.0
-        self.cooldown_stop_until = 0.0
+        self.overlay = overlay
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_rules)
+        self.template_path = template_path
+        self.template = self._load_template(template_path)
 
     def start(self, interval_ms=1000):
         self.timer.start(interval_ms)
 
     def check_rules(self):
-        now = time.time()
-        screenshot = self.device.screencap()
-        image = Image.open(io.BytesIO(screenshot))
-        raw_text = self._ocr_full(image)
-        print(raw_text)
+        if self.template is None:
+            return
 
-        if not self.dialog.recording and now >= self.cooldown_start_until:
-            if self._has_text(image, (300, 530, 440, 610), "对战"):
+        rect = get_window_rect(SCRCPY_TITLE)
+        if not rect:
+            return
+
+        left, top, right, bottom = rect
+        frame = ImageGrab.grab(bbox=(left, top, right, bottom))
+        frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
+
+        roi = frame_bgr[:300, :300]
+        found = self._match_template(roi, self.template)
+        if found:
+            x, y, w, h, _ = found
+            self.overlay.set_match_rect(x, y, w, h)
+            if not self.dialog.recording:
                 self.dialog.start_recording()
-                self.cooldown_start_until = now + 10
-                return
-
-        if self.dialog.recording and now >= self.cooldown_stop_until:
-            if self._has_text(image, (300, 450, 420, 510), "对战"):
+        else:
+            self.overlay.set_match_rect(None)
+            if self.dialog.recording:
                 self.dialog.stop_recording()
-                self.cooldown_stop_until = now + 10
 
-    def _has_text(self, image, box, target):
-        crop = image.crop(box)
-        text = pytesseract.image_to_string(crop, lang="chi_sim")
-        return target in text.replace(" ", "")
+    def _load_template(self, path):
+        if not os.path.exists(path):
+            return None
+        template = cv2.imread(path, cv2.IMREAD_COLOR)
+        return template
 
-    def _ocr_full(self, image):
-        text = pytesseract.image_to_string(image, lang="chi_sim")
-        return text.strip()
+    def _match_template(self, frame, template, threshold=0.8):
+        if template is None or frame is None:
+            return None
+        h, w = template.shape[:2]
+        if frame.shape[0] < h or frame.shape[1] < w:
+            return None
+        result = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+        if max_val >= threshold:
+            x, y = max_loc
+            return x, y, w, h, max_val
+        return None

@@ -2,6 +2,7 @@ import sys
 import re
 import time
 import subprocess
+import ctypes
 
 from ppadb.client import Client as AdbClient
 from PySide6.QtWidgets import QApplication, QMainWindow
@@ -43,7 +44,19 @@ def get_window_rect(title: str):
     right, bottom = win32gui.ClientToScreen(
         hwnd, win32gui.GetClientRect(hwnd)[2:4]
     )
+    scale = get_window_scale(hwnd)
+    if scale != 1.0:
+        left, top = left / scale, top / scale
+        right, bottom = right / scale, bottom / scale
     return left, top, right, bottom
+
+
+def get_window_scale(hwnd: int) -> float:
+    try:
+        dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
+    except Exception:
+        dpi = 96
+    return dpi / 96.0
 
 
 class Overlay(QMainWindow):
@@ -130,6 +143,8 @@ def main():
     emu_w, emu_h = get_wm_size(device)
     print("device:", emu_w, emu_h)
 
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(sys.argv)
     overlay = Overlay(device, emu_w, emu_h)
     overlay.show()

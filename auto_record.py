@@ -22,6 +22,8 @@ class AutoRecorder:
         now = time.time()
         screenshot = self.device.screencap()
         image = Image.open(io.BytesIO(screenshot))
+        raw_text = self._ocr_full(image)
+        print(raw_text)
 
         if not self.dialog.recording and now >= self.cooldown_start_until:
             if self._has_text(image, (300, 530, 440, 610), "对战"):
@@ -38,3 +40,7 @@ class AutoRecorder:
         crop = image.crop(box)
         text = pytesseract.image_to_string(crop, lang="chi_sim")
         return target in text.replace(" ", "")
+
+    def _ocr_full(self, image):
+        text = pytesseract.image_to_string(image, lang="chi_sim")
+        return text.strip()

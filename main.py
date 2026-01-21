@@ -29,7 +29,7 @@ def main():
     dialog.show()
 
     auto_recorder = AutoRecorder(device, dialog)
-    auto_recorder.start()
+    auto_recorder.start(interval_ms=500)
     sys.exit(app.exec())
 
 

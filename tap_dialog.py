@@ -1,4 +1,5 @@
 import re
+import time
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -29,6 +30,9 @@ class TapDialog(QDialog):
         self.emu_w = emu_w
         self.emu_h = emu_h
         self.overlay = overlay
+        self.recording = False
+        self.record_pid = None
+        self.record_remote_path = None
         self.setWindowTitle("模拟器点击")
 
         layout = QVBoxLayout()
@@ -52,6 +56,10 @@ class TapDialog(QDialog):
         self.locate_btn = QPushButton("定位")
         self.locate_btn.clicked.connect(self.on_locate)
         btn_row.addWidget(self.locate_btn)
+
+        self.record_btn = QPushButton("开始录制")
+        self.record_btn.clicked.connect(self.on_record_toggle)
+        btn_row.addWidget(self.record_btn)
 
         self.confirm_btn = QPushButton("确认点击")
         self.confirm_btn.clicked.connect(self.on_confirm)
@@ -91,3 +99,41 @@ class TapDialog(QDialog):
         x, y = coords
         self.device.shell(f"input tap {x} {y}")
         QMessageBox.information(self, "完成", f"已点击坐标 ({x}, {y})。")
+
+    def on_record_toggle(self):
+        if self.recording:
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _start_recording(self):
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        remote_path = f"/sdcard/record_{timestamp}.mp4"
+        cmd = (
+            "sh -c "
+            f"'screenrecord --bit-rate 8000000 {remote_path} "
+            "> /dev/null 2>&1 & echo $!'"
+        )
+        pid_out = self.device.shell(cmd).strip()
+        try:
+            self.record_pid = int(pid_out)
+        except ValueError:
+            QMessageBox.warning(self, "录制失败", f"无法获取录制进程ID：{pid_out}")
+            return
+        self.record_remote_path = remote_path
+        self.recording = True
+        self.record_btn.setText("停止录制")
+
+    def _stop_recording(self):
+        if self.record_pid is None or self.record_remote_path is None:
+            QMessageBox.warning(self, "录制失败", "录制状态异常。")
+            return
+        self.device.shell(f"kill -2 {self.record_pid}")
+        time.sleep(0.5)
+        local_path = f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        self.device.pull(self.record_remote_path, local_path)
+        self.recording = False
+        self.record_pid = None
+        self.record_remote_path = None
+        self.record_btn.setText("开始录制")
+        QMessageBox.information(self, "完成", f"录制已保存：{local_path}")

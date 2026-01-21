@@ -1,9 +1,6 @@
-import sys
 import re
 
-from ppadb.client import Client as AdbClient
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -26,11 +23,12 @@ def get_wm_size(device):
 
 
 class TapDialog(QDialog):
-    def __init__(self, device, emu_w, emu_h):
+    def __init__(self, device, emu_w, emu_h, overlay):
         super().__init__()
         self.device = device
         self.emu_w = emu_w
         self.emu_h = emu_h
+        self.overlay = overlay
         self.setWindowTitle("模拟器点击")
 
         layout = QVBoxLayout()
@@ -50,19 +48,25 @@ class TapDialog(QDialog):
         row_y.addWidget(self.input_y)
         layout.addLayout(row_y)
 
+        btn_row = QHBoxLayout()
+        self.locate_btn = QPushButton("定位")
+        self.locate_btn.clicked.connect(self.on_locate)
+        btn_row.addWidget(self.locate_btn)
+
         self.confirm_btn = QPushButton("确认点击")
         self.confirm_btn.clicked.connect(self.on_confirm)
-        layout.addWidget(self.confirm_btn)
+        btn_row.addWidget(self.confirm_btn)
+        layout.addLayout(btn_row)
 
         self.setLayout(layout)
 
-    def on_confirm(self):
+    def _read_coords(self):
         try:
             x = int(self.input_x.text().strip())
             y = int(self.input_y.text().strip())
         except ValueError:
             QMessageBox.warning(self, "输入错误", "请输入整数坐标。")
-            return
+            return None
 
         if not (0 <= x < self.emu_w) or not (0 <= y < self.emu_h):
             QMessageBox.warning(
@@ -70,25 +74,20 @@ class TapDialog(QDialog):
                 "输入错误",
                 f"坐标超出范围：x 0-{self.emu_w - 1}，y 0-{self.emu_h - 1}",
             )
-            return
+            return None
+        return x, y
 
+    def on_locate(self):
+        coords = self._read_coords()
+        if not coords:
+            return
+        x, y = coords
+        self.overlay.set_marker(x, y)
+
+    def on_confirm(self):
+        coords = self._read_coords()
+        if not coords:
+            return
+        x, y = coords
         self.device.shell(f"input tap {x} {y}")
         QMessageBox.information(self, "完成", f"已点击坐标 ({x}, {y})。")
-
-
-def main():
-    client = AdbClient(host="127.0.0.1", port=5037)
-    device = client.device(DEVICE)
-    if device is None:
-        raise RuntimeError("未找到设备 emulator-5556")
-
-    emu_w, emu_h = get_wm_size(device)
-
-    app = QApplication(sys.argv)
-    dialog = TapDialog(device, emu_w, emu_h)
-    dialog.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

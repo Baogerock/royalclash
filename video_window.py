@@ -42,6 +42,7 @@ class MarkerOverlay(QMainWindow):
         self.rect_scrcpy = None
         self.marker_pos = None
         self.match_rect = None
+        self.match_rect_emulator = None
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -78,6 +79,13 @@ class MarkerOverlay(QMainWindow):
             self.match_rect = None
         else:
             self.match_rect = (x, y, w, h)
+        self.update()
+
+    def set_match_rect_emulator(self, x, y=None, w=None, h=None):
+        if x is None:
+            self.match_rect_emulator = None
+        else:
+            self.match_rect_emulator = (x, y, w, h)
         self.update()
 
     def _map_from_emulator(self, pos: QPointF):
@@ -129,4 +137,18 @@ class MarkerOverlay(QMainWindow):
                 int(y / scale),
                 int(w / scale),
                 int(h / scale),
+            )
+
+        if self.match_rect_emulator:
+            x, y, w, h = self.match_rect_emulator
+            top_left = self._map_from_emulator(QPointF(x, y))
+            bottom_right = self._map_from_emulator(QPointF(x + w, y + h))
+            pen = QPen(Qt.red)
+            pen.setWidth(2)
+            p.setPen(pen)
+            p.drawRect(
+                int(top_left.x()),
+                int(top_left.y()),
+                int(bottom_right.x() - top_left.x()),
+                int(bottom_right.y() - top_left.y()),
             )

@@ -3,10 +3,7 @@ import time
 
 import cv2
 import numpy as np
-from PIL import ImageGrab
 from PySide6.QtCore import QTimer
-
-from video_window import SCRCPY_TITLE, get_window_rect
 
 
 class AutoRecorder:
@@ -27,25 +24,24 @@ class AutoRecorder:
         if self.template is None:
             return
 
-        rect = get_window_rect(SCRCPY_TITLE)
-        if not rect:
+        screenshot = self.device.screencap()
+        frame_bgr = cv2.imdecode(
+            np.frombuffer(screenshot, dtype=np.uint8), cv2.IMREAD_COLOR
+        )
+        if frame_bgr is None:
             return
-
-        left, top, right, bottom = rect
-        frame = ImageGrab.grab(bbox=(left, top, right, bottom))
-        frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
 
         roi = frame_bgr[:300, :300]
         found = self._match_template(roi, self.template)
         if found:
             x, y, w, h, _ = found
-            self.overlay.set_match_rect(x, y, w, h)
+            self.overlay.set_match_rect_emulator(x, y, w, h)
             self.last_detect_time = time.time()
             if not self.dialog.recording:
                 print("检测到模板，开始录制。")
                 self.dialog.start_recording()
         else:
-            self.overlay.set_match_rect(None)
+            self.overlay.set_match_rect_emulator(None)
             if self.dialog.recording and self._should_stop():
                 print("未检测到模板，停止录制。")
                 self.dialog.stop_recording()

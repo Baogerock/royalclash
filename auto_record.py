@@ -1,4 +1,5 @@
 import os
+import time
 
 import cv2
 import numpy as np
@@ -13,6 +14,7 @@ class AutoRecorder:
         self.device = device
         self.dialog = dialog
         self.overlay = overlay
+        self.last_detect_time = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_rules)
         self.template_path = template_path
@@ -38,14 +40,21 @@ class AutoRecorder:
         if found:
             x, y, w, h, _ = found
             self.overlay.set_match_rect(x, y, w, h)
+            self.last_detect_time = time.time()
             if not self.dialog.recording:
                 print("检测到模板，开始录制。")
                 self.dialog.start_recording()
         else:
             self.overlay.set_match_rect(None)
-            if self.dialog.recording:
+            if self.dialog.recording and self._should_stop():
                 print("未检测到模板，停止录制。")
                 self.dialog.stop_recording()
+                self.last_detect_time = None
+
+    def _should_stop(self, grace_seconds=3):
+        if self.last_detect_time is None:
+            return False
+        return (time.time() - self.last_detect_time) >= grace_seconds
 
     def _load_template(self, path):
         if not os.path.exists(path):

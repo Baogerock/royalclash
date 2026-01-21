@@ -125,6 +125,7 @@ class TapDialog(QDialog):
         self.record_remote_path = remote_path
         self.recording = True
         self.record_btn.setText("停止录制")
+        print(f"开始录制，保存到设备路径：{remote_path}")
 
     def stop_recording(self):
         if not self.recording:
@@ -135,9 +136,10 @@ class TapDialog(QDialog):
         self.device.shell(f"kill -2 {self.record_pid}")
         time.sleep(0.5)
         local_path = f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        print(f"保存中：{local_path}")
         self.device.pull(self.record_remote_path, local_path)
         self.recording = False
         self.record_pid = None
         self.record_remote_path = None
         self.record_btn.setText("开始录制")
-        QMessageBox.information(self, "完成", f"录制已保存：{local_path}")
+        print(f"录制已保存：{local_path}")

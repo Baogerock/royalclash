@@ -39,10 +39,12 @@ class AutoRecorder:
             x, y, w, h, _ = found
             self.overlay.set_match_rect(x, y, w, h)
             if not self.dialog.recording:
+                print("检测到模板，开始录制。")
                 self.dialog.start_recording()
         else:
             self.overlay.set_match_rect(None)
             if self.dialog.recording:
+                print("未检测到模板，停止录制。")
                 self.dialog.stop_recording()
 
     def _load_template(self, path):

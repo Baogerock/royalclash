@@ -2,8 +2,6 @@ import sys
 import re
 import time
 import subprocess
-import ctypes
-
 from ppadb.client import Client as AdbClient
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtCore import Qt, QTimer, QPointF
@@ -44,19 +42,7 @@ def get_window_rect(title: str):
     right, bottom = win32gui.ClientToScreen(
         hwnd, win32gui.GetClientRect(hwnd)[2:4]
     )
-    scale = get_window_scale(hwnd)
-    if scale != 1.0:
-        left, top = left / scale, top / scale
-        right, bottom = right / scale, bottom / scale
     return left, top, right, bottom
-
-
-def get_window_scale(hwnd: int) -> float:
-    try:
-        dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
-    except Exception:
-        dpi = 96
-    return dpi / 96.0
 
 
 class Overlay(QMainWindow):
@@ -85,7 +71,13 @@ class Overlay(QMainWindow):
         if r != self.rect_scrcpy:
             self.rect_scrcpy = r
             l, t, rr, bb = r
-            self.setGeometry(l, t, rr - l, bb - t)
+            scale = self.devicePixelRatioF()
+            self.setGeometry(
+                int(l / scale),
+                int(t / scale),
+                int((rr - l) / scale),
+                int((bb - t) / scale),
+            )
             self.update()
 
     def paintEvent(self, e):
@@ -101,8 +93,9 @@ class Overlay(QMainWindow):
     def _map_to_emulator(self, pos: QPointF):
         # overlay 窗口就是 scrcpy 客户区的近似映射
         # 这里做一个 KeepAspectRatio 的黑边处理，避免 scrcpy 拉伸时点偏
-        x, y = pos.x(), pos.y()
-        w, h = self.width(), self.height()
+        scale = self.devicePixelRatioF()
+        x, y = pos.x() * scale, pos.y() * scale
+        w, h = self.width() * scale, self.height() * scale
 
         scale = min(w / self.emu_w, h / self.emu_h)
         disp_w = self.emu_w * scale

@@ -134,7 +134,7 @@ class TapDialog(QDialog):
             QMessageBox.warning(self, "录制失败", "录制状态异常。")
             return
         self.device.shell(f"kill -2 {self.record_pid}")
-        time.sleep(0.5)
+        self._wait_for_remote_file()
         local_path = f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         print(f"保存中：{local_path}")
         self.device.pull(self.record_remote_path, local_path)
@@ -143,3 +143,33 @@ class TapDialog(QDialog):
         self.record_remote_path = None
         self.record_btn.setText("开始录制")
         print(f"录制已保存：{local_path}")
+
+    def _wait_for_remote_file(self, timeout_s=10):
+        start = time.time()
+        last_size = -1
+        stable_checks = 0
+        while time.time() - start < timeout_s:
+            size = self._get_remote_size(self.record_remote_path)
+            if size is None:
+                time.sleep(0.5)
+                continue
+            if size == last_size and size > 0:
+                stable_checks += 1
+                if stable_checks >= 2:
+                    return
+            else:
+                stable_checks = 0
+            last_size = size
+            print(f"保存中：远端大小 {size} bytes")
+            time.sleep(0.5)
+        print("保存中：等待远端文件完成超时，继续拉取。")
+
+    def _get_remote_size(self, path):
+        out = self.device.shell(f"ls -l {path}").strip()
+        parts = out.split()
+        if len(parts) < 5:
+            return None
+        try:
+            return int(parts[4])
+        except ValueError:
+            return None

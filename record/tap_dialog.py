@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -17,7 +18,8 @@ DEVICE = "emulator-5556"
 # 超参配置
 VIDEO_BITRATE = "8000000"  # 录制码率
 REMOTE_SAVE_DIR = "/sdcard"  # 设备端保存目录
-LOCAL_SAVE_DIR = "."  # 本地保存目录
+BASE_DIR = Path(__file__).resolve().parents[1]
+LOCAL_SAVE_DIR = BASE_DIR / "video"  # 本地保存目录
 WAIT_REMOTE_TIMEOUT_S = 10  # 等待远端文件稳定超时（秒）
 
 
@@ -145,8 +147,8 @@ class TapDialog(QDialog):
             return
         self.device.shell(f"kill -2 {self.record_pid}")
         self._wait_for_remote_file()
-        local_path = os.path.join(
-            LOCAL_SAVE_DIR, f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        local_path = str(
+            LOCAL_SAVE_DIR / f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         )
         print(f"保存中：{local_path}")
         self.device.pull(self.record_remote_path, local_path)

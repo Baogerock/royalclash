@@ -1,12 +1,14 @@
 import os
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
 from PySide6.QtCore import QTimer
 
 # 超参配置
-TEMPLATE_PATH = "trophy.png"  # 模板图片路径
+BASE_DIR = Path(__file__).resolve().parents[1]
+TEMPLATE_PATH = str(BASE_DIR / "trophy.png")  # 模板图片路径
 MATCH_THRESHOLD = 0.8  # 模板匹配阈值
 ROI_LEFT = 0  # 模板匹配区域左上角 X
 ROI_TOP = 0  # 模板匹配区域左上角 Y

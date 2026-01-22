@@ -113,7 +113,7 @@ class TapDialog(QDialog):
         remote_path = f"/sdcard/record_{timestamp}.mp4"
         cmd = (
             "sh -c "
-            f"'screenrecord --bit-rate 8000000 {remote_path} "
+            f"'nohup screenrecord --bit-rate 8000000 {remote_path} "
             "> /dev/null 2>&1 & echo $!'"
         )
         pid_out = self.device.shell(cmd).strip()
@@ -121,6 +121,10 @@ class TapDialog(QDialog):
             self.record_pid = int(pid_out)
         except ValueError:
             QMessageBox.warning(self, "录制失败", f"无法获取录制进程ID：{pid_out}")
+            return
+        if not self._is_pid_alive(self.record_pid):
+            print("录制进程未启动成功，请检查设备是否支持 screenrecord。")
+            self.record_pid = None
             return
         self.record_remote_path = remote_path
         self.recording = True
@@ -173,3 +177,7 @@ class TapDialog(QDialog):
             return int(parts[4])
         except ValueError:
             return None
+
+    def _is_pid_alive(self, pid):
+        out = self.device.shell("ps -A").strip()
+        return str(pid) in out

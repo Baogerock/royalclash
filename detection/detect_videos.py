@@ -1,3 +1,4 @@
+import importlib.util
 import time
 from pathlib import Path
 
@@ -200,6 +201,11 @@ class TroopResults:
 class TroopDetector:
     def __init__(self, detectors=None, conf=0.7, iou_thre=0.6):
         self.detectors = detectors or PATH_DETECTORS
+        if not _has_katacr():
+            raise RuntimeError(
+                "缺少 katacr 依赖，无法加载自定义权重。请先安装 katacr，"
+                "或使用官方 YOLOv8 权重重新训练。"
+            )
         self.models = [YOLO(str(p)) for p in self.detectors]
         self.conf = conf
         self.iou_thre = iou_thre
@@ -310,7 +316,11 @@ def main():
     if not VIDEO_DIR.exists():
         print(f"视频目录不存在：{VIDEO_DIR}")
         return
-    detector = TroopDetector()
+    try:
+        detector = TroopDetector()
+    except RuntimeError as exc:
+        print(f"检测模型加载失败：{exc}")
+        return
     for video_path in iter_videos(VIDEO_DIR):
         process_video(video_path, detector)
         time.sleep(0.2)
@@ -318,3 +328,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def _has_katacr():
+    return importlib.util.find_spec("katacr") is not None

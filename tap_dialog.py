@@ -1,3 +1,4 @@
+import os
 import re
 import time
 
@@ -13,6 +14,11 @@ from PySide6.QtWidgets import (
 
 
 DEVICE = "emulator-5556"
+# 超参配置
+VIDEO_BITRATE = "8000000"  # 录制码率
+REMOTE_SAVE_DIR = "/sdcard"  # 设备端保存目录
+LOCAL_SAVE_DIR = "."  # 本地保存目录
+WAIT_REMOTE_TIMEOUT_S = 10  # 等待远端文件稳定超时（秒）
 
 
 def get_wm_size(device):
@@ -110,10 +116,10 @@ class TapDialog(QDialog):
         if self.recording:
             return
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        remote_path = f"/sdcard/record_{timestamp}.mp4"
+        remote_path = f"{REMOTE_SAVE_DIR}/record_{timestamp}.mp4"
         cmd = (
             "sh -c "
-            f"'nohup screenrecord --bit-rate 8000000 {remote_path} "
+            f"'nohup screenrecord --bit-rate {VIDEO_BITRATE} {remote_path} "
             "> /dev/null 2>&1 & echo $!'"
         )
         pid_out = self.device.shell(cmd).strip()
@@ -139,7 +145,9 @@ class TapDialog(QDialog):
             return
         self.device.shell(f"kill -2 {self.record_pid}")
         self._wait_for_remote_file()
-        local_path = f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        local_path = os.path.join(
+            LOCAL_SAVE_DIR, f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+        )
         print(f"保存中：{local_path}")
         self.device.pull(self.record_remote_path, local_path)
         self.recording = False
@@ -148,7 +156,7 @@ class TapDialog(QDialog):
         self.record_btn.setText("开始录制")
         print(f"录制已保存：{local_path}")
 
-    def _wait_for_remote_file(self, timeout_s=10):
+    def _wait_for_remote_file(self, timeout_s=WAIT_REMOTE_TIMEOUT_S):
         start = time.time()
         last_size = -1
         stable_checks = 0

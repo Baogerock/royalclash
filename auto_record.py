@@ -5,9 +5,18 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QTimer
 
+# 超参配置
+TEMPLATE_PATH = "trophy.png"  # 模板图片路径
+MATCH_THRESHOLD = 0.8  # 模板匹配阈值
+ROI_LEFT = 0  # 模板匹配区域左上角 X
+ROI_TOP = 0  # 模板匹配区域左上角 Y
+ROI_RIGHT = 300  # 模板匹配区域右下角 X
+ROI_BOTTOM = 300  # 模板匹配区域右下角 Y
+STOP_GRACE_SECONDS = 3  # 模板消失后多少秒才停止录制
+
 
 class AutoRecorder:
-    def __init__(self, device, dialog, overlay, template_path="trophy.png"):
+    def __init__(self, device, dialog, overlay, template_path=TEMPLATE_PATH):
         self.device = device
         self.dialog = dialog
         self.overlay = overlay
@@ -31,7 +40,7 @@ class AutoRecorder:
         if frame_bgr is None:
             return
 
-        roi = frame_bgr[:300, :300]
+        roi = frame_bgr[ROI_TOP:ROI_BOTTOM, ROI_LEFT:ROI_RIGHT]
         found = self._match_template(roi, self.template)
         if found:
             x, y, w, h, _ = found
@@ -47,7 +56,7 @@ class AutoRecorder:
                 self.dialog.stop_recording()
                 self.last_detect_time = None
 
-    def _should_stop(self, grace_seconds=3):
+    def _should_stop(self, grace_seconds=STOP_GRACE_SECONDS):
         if self.last_detect_time is None:
             return False
         return (time.time() - self.last_detect_time) >= grace_seconds
@@ -58,7 +67,7 @@ class AutoRecorder:
         template = cv2.imread(path, cv2.IMREAD_COLOR)
         return template
 
-    def _match_template(self, frame, template, threshold=0.8):
+    def _match_template(self, frame, template, threshold=MATCH_THRESHOLD):
         if template is None or frame is None:
             return None
         h, w = template.shape[:2]

@@ -8,6 +8,9 @@ from auto_record import AutoRecorder
 from tap_dialog import DEVICE, get_wm_size, TapDialog
 from video_window import start_scrcpy, MarkerOverlay
 
+# 超参配置
+TEMPLATE_CHECK_INTERVAL_MS = 1000  # 模板识别间隔（毫秒）
+
 
 def main():
     client = AdbClient(host="127.0.0.1", port=5037)
@@ -29,7 +32,7 @@ def main():
     dialog.show()
 
     auto_recorder = AutoRecorder(device, dialog, overlay)
-    auto_recorder.start(interval_ms=1000)
+    auto_recorder.start(interval_ms=TEMPLATE_CHECK_INTERVAL_MS)
     sys.exit(app.exec())
 
 

@@ -147,9 +147,8 @@ class TapDialog(QDialog):
             return
         self.device.shell(f"kill -2 {self.record_pid}")
         self._wait_for_remote_file()
-        local_path = str(
-            LOCAL_SAVE_DIR / f"record_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
-        )
+        LOCAL_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+        local_path = str(LOCAL_SAVE_DIR / f"{self._next_sequence():03d}.mp4")
         print(f"保存中：{local_path}")
         self.device.pull(self.record_remote_path, local_path)
         self.recording = False
@@ -191,3 +190,13 @@ class TapDialog(QDialog):
     def _is_pid_alive(self, pid):
         out = self.device.shell("ps -A").strip()
         return str(pid) in out
+
+    def _next_sequence(self):
+        existing = []
+        for path in LOCAL_SAVE_DIR.iterdir():
+            if not path.is_file():
+                continue
+            match = re.match(r"^(\\d{3})\\.mp4$", path.name)
+            if match:
+                existing.append(int(match.group(1)))
+        return max(existing, default=0) + 1

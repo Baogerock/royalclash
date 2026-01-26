@@ -5,7 +5,7 @@ import numpy as np
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 CARD_SAMPLE_THRESHOLD = 0.95
-CARD_SAMPLE_FPS = 1
+CARD_SAMPLE_FPS = 5
 
 CARD_REGIONS = [
     ("1", ((157, 34), (292, 197))),

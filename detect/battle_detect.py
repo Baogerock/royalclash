@@ -135,7 +135,7 @@ def render_grid_frame(
             continue
         cls_idx = int(det[-2])
         unit_name = idx2unit.get(cls_idx, str(cls_idx))
-        if unit_name in {"bar", "bar-level"} or unit_name.endswith("-bar"):
+        if unit_name in {"bar", "bar-level", "clock"} or unit_name.endswith("-bar"):
             continue
         hit_map.setdefault(cell_id, set()).add(unit_name)
         cell = cell_by_id.get(cell_id)

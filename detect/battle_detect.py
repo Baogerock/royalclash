@@ -127,6 +127,21 @@ def render_grid_frame(
     grid_base = np.full((frame_height, frame_width, 3), GRID_BG_COLOR, dtype=np.uint8)
     overlay = grid_base.copy()
     hit_map = {}
+    level_bar_cells = set()
+
+    level_bar_names = {"bar-level", "level-bar", "level_bar"}
+    ignore_bar_names = {"bar", "bar-level", "clock"}
+
+    for det in detections:
+        cls_idx = int(det[-2])
+        unit_name = idx2unit.get(cls_idx, str(cls_idx))
+        if unit_name in level_bar_names:
+            x0, y0, x1, y1 = det[:4]
+            cx = (x0 + x1) / 2.0
+            cy = (y0 + y1) / 2.0
+            cell_id = find_cell_id(cells, cx, cy)
+            if cell_id is not None:
+                level_bar_cells.add(cell_id)
 
     for det in detections:
         x0, y0, x1, y1 = det[:4]
@@ -137,16 +152,17 @@ def render_grid_frame(
             continue
         cls_idx = int(det[-2])
         unit_name = idx2unit.get(cls_idx, str(cls_idx))
-        if unit_name in {"bar", "bar-level", "clock"} or unit_name.endswith("-bar"):
+        if unit_name in ignore_bar_names or unit_name.endswith("-bar"):
             continue
         hit_map.setdefault(cell_id, set()).add(unit_name)
         cell = cell_by_id.get(cell_id)
         if cell is not None:
+            fill_color = (0, 0, 255) if cell_id in level_bar_cells else (255, 0, 0)
             cv2.rectangle(
                 overlay,
                 (int(cell["x0"]), int(cell["y0"])),
                 (int(cell["x1"]), int(cell["y1"])),
-                (0, 180, 255),
+                fill_color,
                 thickness=-1,
             )
 

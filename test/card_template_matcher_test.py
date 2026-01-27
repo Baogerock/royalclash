@@ -138,13 +138,29 @@ def format_label(region_name: str, label: str) -> str:
     return label
 
 
+def resolve_model_path(candidate: Path) -> Path | None:
+    if not candidate.exists():
+        return None
+    if candidate.is_file():
+        return candidate
+    weights_dir = candidate / "weights"
+    for name in ("best.pt", "last.pt"):
+        path = weights_dir / name
+        if path.exists():
+            return path
+    for path in sorted(candidate.rglob("*.pt")):
+        return path
+    return None
+
+
 def load_classifier(repo_root: Path) -> YOLO:
-    model_path = Path(os.environ.get(CLASSIFIER_MODEL_ENV, "")).expanduser()
-    if not model_path.exists():
-        model_path = repo_root / DEFAULT_MODEL_PATH
-    if not model_path.exists():
+    env_path = Path(os.environ.get(CLASSIFIER_MODEL_ENV, "")).expanduser()
+    model_path = resolve_model_path(env_path)
+    if model_path is None:
+        model_path = resolve_model_path(repo_root / DEFAULT_MODEL_PATH)
+    if model_path is None:
         raise FileNotFoundError(
-            f"未找到分类模型: {model_path}. 请先训练模型或设置 {CLASSIFIER_MODEL_ENV} 环境变量。"
+            f"未找到分类模型: {env_path}. 请先训练模型或设置 {CLASSIFIER_MODEL_ENV} 环境变量。"
         )
     return YOLO(str(model_path), task="classify")
 

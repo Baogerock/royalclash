@@ -26,6 +26,19 @@ REGION_TEMPLATE_DIRS = {
     "water": "water",
 }
 
+CARD_NAME_MAP = {
+    "00": "觉醒卫队",
+    "01": "牢笼",
+    "02": "卫猪",
+    "03": "电豆",
+    "04": "飞机",
+    "05": "电车",
+    "06": "卫队",
+    "07": "蛮桶",
+    "08": "火球",
+    "09": "觉醒卫猪",
+}
+
 
 @dataclass(frozen=True)
 class TemplateItem:
@@ -99,6 +112,12 @@ def draw_label(canvas: np.ndarray, region: tuple[tuple[int, int], tuple[int, int
     cv2.putText(canvas, label, (text_x, text_y), font, scale, (0, 255, 0), thickness, cv2.LINE_AA)
 
 
+def format_label(region_name: str, label: str) -> str:
+    if region_name in {"1", "2", "3", "4", "next"}:
+        return CARD_NAME_MAP.get(label, label)
+    return label
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     video_dir = repo_root / "output" / "card"
@@ -132,7 +151,8 @@ def main() -> None:
             for region_name, coords in CARD_REGIONS:
                 crop = crop_region(frame, coords)
                 label = match_template(crop, templates_by_region.get(region_name, []))
-                draw_label(canvas, coords, label)
+                display_label = format_label(region_name, label)
+                draw_label(canvas, coords, display_label)
 
             combined = np.hstack([frame, canvas])
             cv2.imshow(f"card-template-matcher: {video_path.name}", combined)

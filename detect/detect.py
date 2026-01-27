@@ -11,9 +11,11 @@ from battle_detect import (
     GRID_BG_COLOR,
     TEXT_PANEL_WIDTH,
     build_grid_layout,
+    find_cell_id,
     iter_videos,
     render_grid_frame,
 )
+from katacr.constants.label_list import idx2unit
 from katacr.yolov8.combo_detect import ComboDetector, path_detectors
 
 CARD_REGIONS = [
@@ -170,6 +172,13 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
     pad_width = width - TEXT_PANEL_WIDTH
     if pad_width < 0:
         pad_width = 0
+    max_event_lines = max((top_h - 2 * 12) // 22, 1)
+    event_lines: list[str] = []
+    pending_elixir: list[tuple[int, int]] = []
+    last_card_state: dict[str, str] = {}
+    last_change_label = "unknown"
+    last_change_frame = -9999
+    last_clock_frame = -9999
 
     frame_idx = 0
     while True:
@@ -183,7 +192,70 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
         pred = combo.infer(top_part)
         battle_frame = pred.show_box(verbose=False, show_conf=True)
         detections = pred.get_data()
-        grid_frame = render_grid_frame(top_h, width, cells, cell_by_id, grid_lines, detections)
+        elixir_cells = []
+        clock_cells = []
+        for det in detections:
+            cls_idx = int(det[-2])
+            unit_name = idx2unit.get(cls_idx, str(cls_idx))
+            if unit_name not in {"elixir", "clock"}:
+                continue
+            x0, y0, x1, y1 = det[:4]
+            cx = (x0 + x1) / 2.0
+            cy = (y0 + y1) / 2.0
+            cell_id = find_cell_id(cells, cx, cy)
+            if cell_id is None:
+                continue
+            if unit_name == "elixir":
+                elixir_cells.append(cell_id)
+            else:
+                clock_cells.append(cell_id)
+
+        if elixir_cells:
+            for cell_id in elixir_cells:
+                pending_elixir.append((frame_idx, cell_id))
+
+        card_labels: dict[str, str] = {}
+        for region_name, coords in CARD_REGIONS:
+            if region_name not in {"1", "2", "3", "4"}:
+                continue
+            crop = crop_region(bottom_part, coords)
+            label = classify_card(crop, classifier)
+            card_labels[region_name] = label
+
+        changed_label = None
+        for region_name, label in card_labels.items():
+            if last_card_state.get(region_name) != label:
+                changed_label = format_label(region_name, label)
+                last_change_label = changed_label
+                last_change_frame = frame_idx
+                break
+        last_card_state = card_labels
+
+        if pending_elixir and changed_label:
+            frame_limit = frame_idx - 6
+            pending_elixir = [(f, c) for f, c in pending_elixir if f >= frame_limit]
+            if pending_elixir:
+                _, cell_id = pending_elixir.pop(0)
+                event_lines.append(f"me use card {changed_label} place on {cell_id}")
+                if len(event_lines) > max_event_lines:
+                    event_lines = event_lines[-max_event_lines:]
+
+        if clock_cells and not elixir_cells and frame_idx - last_clock_frame > 6:
+            card_name = last_change_label if frame_idx - last_change_frame <= 6 else "unknown"
+            event_lines.append(f"enemy use card {card_name} place on {clock_cells[0]}")
+            last_clock_frame = frame_idx
+            if len(event_lines) > max_event_lines:
+                event_lines = event_lines[-max_event_lines:]
+
+        grid_frame = render_grid_frame(
+            top_h,
+            width,
+            cells,
+            cell_by_id,
+            grid_lines,
+            detections,
+            event_lines=event_lines,
+        )
         if pad_width:
             grid_frame = np.concatenate(
                 [grid_frame, np.full((top_h, pad_width, 3), GRID_BG_COLOR, dtype=np.uint8)],

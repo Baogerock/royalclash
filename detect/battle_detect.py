@@ -123,6 +123,7 @@ def render_grid_frame(
     cell_by_id,
     grid_lines,
     detections: np.ndarray,
+    event_lines: list[str] | None = None,
 ):
     grid_base = np.full((frame_height, frame_width, 3), GRID_BG_COLOR, dtype=np.uint8)
     overlay = grid_base.copy()
@@ -137,7 +138,7 @@ def render_grid_frame(
             continue
         cls_idx = int(det[-2])
         unit_name = idx2unit.get(cls_idx, str(cls_idx))
-        if unit_name in {"bar", "bar-level", "clock"} or unit_name.endswith("-bar"):
+        if unit_name in {"bar", "bar-level", "clock", "elixir"} or unit_name.endswith("-bar"):
             continue
         hit_map.setdefault(cell_id, set()).add(unit_name)
         cell = cell_by_id.get(cell_id)
@@ -164,7 +165,10 @@ def render_grid_frame(
     lines = []
     for cell_id in sorted(hit_map.keys()):
         units = ", ".join(sorted(hit_map[cell_id]))
-        lines.append(f"格子 {cell_id}: {units}")
+        lines.append(f"Cell {cell_id}: {units}")
+    if event_lines:
+        lines.append("-" * 18)
+        lines.extend(event_lines)
     y = TEXT_MARGIN + TEXT_LINE_HEIGHT
     for text in lines:
         if y >= frame_height - TEXT_MARGIN:

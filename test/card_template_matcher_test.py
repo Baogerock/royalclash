@@ -31,14 +31,14 @@ REGION_TEMPLATE_DIRS = {
 CARD_NAME_MAP = {
     "00": "Awakened Guards",
     "01": "Cage",
-    "02": "Hog Guards",
-    "03": "Electro Spirit",
-    "04": "Flying Machine",
-    "05": "Electro Giant",
+    "02": "Hogs",
+    "03": "ElecSpirit",
+    "04": "Plane",
+    "05": "ElecCar",
     "06": "Guards",
-    "07": "Barbarian Barrel",
+    "07": "Barrel",
     "08": "Fireball",
-    "09": "Awakened Hog Rider",
+    "09": "Awakened Hogs",
 }
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"

@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument("--imgsz", type=int, default=96, help="Image size.")
     parser.add_argument("--batch", type=int, default=32, help="Batch size.")
     parser.add_argument("--model", type=str, default="yolov8n-cls.pt", help="YOLO classification model.")
+    parser.add_argument("--val", action="store_true", help="Enable validation split if available.")
     parser.add_argument(
         "--project",
         type=Path,
@@ -38,6 +39,7 @@ def main() -> None:
         batch=args.batch,
         project=str(args.project),
         name=args.name,
+        val=args.val,
     )
 
 

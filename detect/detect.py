@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from detect.battle_detect import (
+from battle_detect import (
     GRID_BG_COLOR,
     TEXT_PANEL_WIDTH,
     build_grid_layout,

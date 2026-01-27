@@ -193,7 +193,8 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
         card_canvas = render_card_frame(bottom_part, classifier)
         card_frame = np.hstack([card_canvas, card_canvas])
         right_panel = np.concatenate([grid_frame, card_frame], axis=0)
-        output_frame = np.concatenate([frame, right_panel], axis=1)
+        left_panel = np.concatenate([battle_frame, bottom_part], axis=0)
+        output_frame = np.concatenate([left_panel, right_panel], axis=1)
 
         writer.write(output_frame)
 

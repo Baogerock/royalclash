@@ -30,6 +30,9 @@ def main() -> None:
     data_dir = args.data
     if not data_dir.exists():
         raise FileNotFoundError(f"Dataset directory not found: {data_dir}")
+    val_dir = data_dir / "val"
+    use_val = args.val and val_dir.exists()
+    split = "val" if use_val else "train"
 
     model = YOLO(args.model)
     model.train(
@@ -39,7 +42,8 @@ def main() -> None:
         batch=args.batch,
         project=str(args.project),
         name=args.name,
-        val=args.val,
+        val=use_val,
+        split=split,
     )
 
 

@@ -272,11 +272,16 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
         output_frame = np.concatenate([left_panel, right_panel], axis=1)
 
         writer.write(output_frame)
+        cv2.imshow("detect-all", output_frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
 
         if frame_idx % 100 == 0:
             print(f"{path_video.name} 已处理 {frame_idx} 帧")
 
     cap.release()
+    cv2.destroyAllWindows()
     writer.release()
     print(f"完成: {path_video.name} -> {output_path}")
 

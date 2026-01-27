@@ -56,7 +56,7 @@ WATER_NAME_MAP = {
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
-SHOW_PREVIEW_ENV = "CARD_DETECT_PREVIEW"
+SHOW_PREVIEW_ENV = False
 
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:
@@ -182,7 +182,7 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
     last_clock_frame = -9999
 
     frame_idx = 0
-    show_preview = os.environ.get(SHOW_PREVIEW_ENV, "").lower() in {"1", "true", "yes", "on"}
+    show_preview = SHOW_PREVIEW_ENV
 
     while True:
         ret, frame = cap.read()

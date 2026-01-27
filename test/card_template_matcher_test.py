@@ -106,7 +106,7 @@ def match_template(crop: np.ndarray, templates: list[TemplateItem]) -> str:
 def classify_card(crop: np.ndarray, model: YOLO) -> str:
     if crop.size == 0:
         return "?"
-    results = model.predict(crop, verbose=False)
+    results = model.predict(crop, verbose=False, task="classify")
     if not results:
         return "?"
     result = results[0]
@@ -146,7 +146,7 @@ def load_classifier(repo_root: Path) -> YOLO:
         raise FileNotFoundError(
             f"未找到分类模型: {model_path}. 请先训练模型或设置 {CLASSIFIER_MODEL_ENV} 环境变量。"
         )
-    return YOLO(str(model_path))
+    return YOLO(str(model_path), task="classify")
 
 
 def main() -> None:

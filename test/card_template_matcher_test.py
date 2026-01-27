@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 import cv2
 import numpy as np
+from ultralytics import YOLO
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
@@ -38,6 +40,9 @@ CARD_NAME_MAP = {
     "08": "Fireball",
     "09": "Awakened Hog Rider",
 }
+
+CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
+DEFAULT_MODEL_PATH = Path("train/train_card/runs/classify/weights/best.pt")
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,21 @@ def match_template(crop: np.ndarray, templates: list[TemplateItem]) -> str:
     return best_name
 
 
+def classify_card(crop: np.ndarray, model: YOLO) -> str:
+    if crop.size == 0:
+        return "?"
+    results = model.predict(crop, verbose=False)
+    if not results:
+        return "?"
+    result = results[0]
+    probs = result.probs
+    if probs is None:
+        return "?"
+    top_index = int(probs.top1)
+    names = result.names or {}
+    return str(names.get(top_index, top_index))
+
+
 def draw_label(canvas: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]], label: str) -> None:
     (x1, y1), (x2, y2) = region
     cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -118,6 +138,17 @@ def format_label(region_name: str, label: str) -> str:
     return label
 
 
+def load_classifier(repo_root: Path) -> YOLO:
+    model_path = Path(os.environ.get(CLASSIFIER_MODEL_ENV, "")).expanduser()
+    if not model_path.exists():
+        model_path = repo_root / DEFAULT_MODEL_PATH
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"未找到分类模型: {model_path}. 请先训练模型或设置 {CLASSIFIER_MODEL_ENV} 环境变量。"
+        )
+    return YOLO(str(model_path))
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     video_dir = repo_root / "output" / "card"
@@ -136,6 +167,8 @@ def main() -> None:
         print(f"未找到视频文件: {video_dir}")
         return
 
+    classifier = load_classifier(repo_root)
+
     for video_path in videos:
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
@@ -150,7 +183,10 @@ def main() -> None:
             canvas = np.zeros_like(frame)
             for region_name, coords in CARD_REGIONS:
                 crop = crop_region(frame, coords)
-                label = match_template(crop, templates_by_region.get(region_name, []))
+                if region_name in {"1", "2", "3", "4"}:
+                    label = classify_card(crop, classifier)
+                else:
+                    label = match_template(crop, templates_by_region.get(region_name, []))
                 display_label = format_label(region_name, label)
                 draw_label(canvas, coords, display_label)
 

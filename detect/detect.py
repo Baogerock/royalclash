@@ -56,6 +56,7 @@ WATER_NAME_MAP = {
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
+SHOW_PREVIEW_ENV = "CARD_DETECT_PREVIEW"
 
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:
@@ -181,6 +182,8 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
     last_clock_frame = -9999
 
     frame_idx = 0
+    show_preview = os.environ.get(SHOW_PREVIEW_ENV, "").lower() in {"1", "true", "yes", "on"}
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -272,16 +275,18 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
         output_frame = np.concatenate([left_panel, right_panel], axis=1)
 
         writer.write(output_frame)
-        cv2.imshow("detect-all", output_frame)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
-            break
+        if show_preview:
+            cv2.imshow("detect-all", output_frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
 
         if frame_idx % 100 == 0:
             print(f"{path_video.name} 已处理 {frame_idx} 帧")
 
     cap.release()
-    cv2.destroyAllWindows()
+    if show_preview:
+        cv2.destroyAllWindows()
     writer.release()
     print(f"完成: {path_video.name} -> {output_path}")
 

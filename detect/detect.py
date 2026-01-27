@@ -176,7 +176,7 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
     event_lines: list[str] = []
     pending_elixir: list[tuple[int, int]] = []
     last_card_state: dict[str, str] = {}
-    last_change_label = "unknown"
+    last_removed_label: str | None = None
     last_change_frame = -9999
     last_clock_frame = -9999
 
@@ -222,27 +222,30 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
             label = classify_card(crop, classifier)
             card_labels[region_name] = label
 
-        changed_label = None
-        for region_name, label in card_labels.items():
-            if last_card_state.get(region_name) != label:
-                changed_label = format_label(region_name, label)
-                last_change_label = changed_label
+        removed_label = None
+        for region_name, prev_label in last_card_state.items():
+            current_label = card_labels.get(region_name)
+            if current_label is not None and current_label != prev_label:
+                removed_label = format_label(region_name, prev_label)
+                last_removed_label = removed_label
                 last_change_frame = frame_idx
                 break
         last_card_state = card_labels
 
-        if pending_elixir and changed_label:
+        if pending_elixir and removed_label:
             frame_limit = frame_idx - 6
             pending_elixir = [(f, c) for f, c in pending_elixir if f >= frame_limit]
             if pending_elixir:
                 _, cell_id = pending_elixir.pop(0)
-                event_lines.append(f"me use card {changed_label} place on {cell_id}")
+                if removed_label != "unknown":
+                    event_lines.append(f"me use card {removed_label} place on {cell_id}")
                 if len(event_lines) > max_event_lines:
                     event_lines = event_lines[-max_event_lines:]
 
         if clock_cells and not elixir_cells and frame_idx - last_clock_frame > 6:
-            card_name = last_change_label if frame_idx - last_change_frame <= 6 else "unknown"
-            event_lines.append(f"enemy use card {card_name} place on {clock_cells[0]}")
+            card_name = last_removed_label if frame_idx - last_change_frame <= 6 else None
+            if card_name and card_name != "unknown":
+                event_lines.append(f"enemy use card {card_name} place on {clock_cells[0]}")
             last_clock_frame = frame_idx
             if len(event_lines) > max_event_lines:
                 event_lines = event_lines[-max_event_lines:]

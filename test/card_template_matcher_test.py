@@ -42,7 +42,7 @@ CARD_NAME_MAP = {
 }
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
-DEFAULT_MODEL_PATH = Path("train/train_card/runs/classify/weights/best.pt")
+DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
 
 @dataclass(frozen=True)

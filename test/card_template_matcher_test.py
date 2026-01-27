@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
@@ -38,6 +40,18 @@ CARD_NAME_MAP = {
     "08": "火球",
     "09": "觉醒卫猪",
 }
+
+FONT_CANDIDATES = [
+    os.environ.get("CARD_FONT_PATH", ""),
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.otf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+    "/usr/share/fonts/truetype/arphic/ukai.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+]
 
 
 @dataclass(frozen=True)
@@ -103,19 +117,47 @@ def draw_label(canvas: np.ndarray, region: tuple[tuple[int, int], tuple[int, int
     cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
     center_x = int((x1 + x2) / 2)
     center_y = int((y1 + y2) / 2)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 0.7
-    thickness = 2
-    text_size, _ = cv2.getTextSize(label, font, scale, thickness)
-    text_x = center_x - text_size[0] // 2
-    text_y = center_y + text_size[1] // 2
-    cv2.putText(canvas, label, (text_x, text_y), font, scale, (0, 255, 0), thickness, cv2.LINE_AA)
+    font_size = 22
+    font = load_font(font_size)
+    if font is None:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = 0.7
+        thickness = 2
+        text_size, _ = cv2.getTextSize(label, font, scale, thickness)
+        text_x = center_x - text_size[0] // 2
+        text_y = center_y + text_size[1] // 2
+        cv2.putText(canvas, label, (text_x, text_y), font, scale, (0, 255, 0), thickness, cv2.LINE_AA)
+        return
+
+    pil_image = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_image)
+    text_left, text_top, text_right, text_bottom = draw.textbbox((0, 0), label, font=font)
+    text_width = text_right - text_left
+    text_height = text_bottom - text_top
+    text_x = center_x - text_width // 2
+    text_y = center_y - text_height // 2
+    draw.text((text_x, text_y), label, font=font, fill=(0, 255, 0))
+    canvas[:, :] = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
 
 def format_label(region_name: str, label: str) -> str:
     if region_name in {"1", "2", "3", "4", "next"}:
         return CARD_NAME_MAP.get(label, label)
     return label
+
+
+def load_font(font_size: int) -> ImageFont.FreeTypeFont | None:
+    for path in FONT_CANDIDATES:
+        if not path:
+            continue
+        font_path = Path(path)
+        if not font_path.exists():
+            continue
+        try:
+            return ImageFont.truetype(str(font_path), font_size)
+        except OSError:
+            continue
+    return None
 
 
 def main() -> None:

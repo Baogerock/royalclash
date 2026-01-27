@@ -139,7 +139,7 @@ def render_card_frame(bottom_part: np.ndarray, classifier: YOLO) -> np.ndarray:
         label = classify_card(crop, classifier)
         display_label = format_label(region_name, label)
         draw_label(canvas, coords, display_label)
-    return np.hstack([bottom_part, canvas])
+    return canvas
 
 
 def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, output_dir: Path) -> None:
@@ -190,7 +190,8 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
                 axis=1,
             )
 
-        card_frame = render_card_frame(bottom_part, classifier)
+        card_canvas = render_card_frame(bottom_part, classifier)
+        card_frame = np.hstack([card_canvas, card_canvas])
         right_panel = np.concatenate([grid_frame, card_frame], axis=0)
         output_frame = np.concatenate([frame, right_panel], axis=1)
 

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from ultralytics import YOLO
 
 
 def main() -> None:
+    os.environ.setdefault("WANDB_DISABLED", "true")
+    os.environ.setdefault("WANDB_MODE", "disabled")
     parser = argparse.ArgumentParser(description="Train a small YOLO classifier for card recognition.")
     parser.add_argument("--data", type=Path, default=Path("data/card"), help="Dataset root directory.")
     parser.add_argument("--epochs", type=int, default=50, help="Training epochs.")

@@ -35,18 +35,31 @@ def crop_regions(frame: np.ndarray, regions):
 
 
 def segment_digits(roi: np.ndarray):
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    if roi is None or roi.size == 0:
+        return []
+
+    scale = 4
+    resized = cv2.resize(roi, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
+    _, bright = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    edges = cv2.Canny(enhanced, 50, 150)
+    combined = cv2.bitwise_or(bright, edges)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    cleaned = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=1)
 
     contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     boxes = []
     height, width = cleaned.shape[:2]
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
-        if w < 4 or h < 8:
+        if w < 8 or h < 12:
             continue
         if w > width or h > height:
             continue
@@ -60,7 +73,7 @@ def segment_digits(roi: np.ndarray):
         top = max(0, y - pad)
         right = min(width, x + w + pad)
         bottom = min(height, y + h + pad)
-        digit = roi[top:bottom, left:right]
+        digit = resized[top:bottom, left:right]
         if digit.size == 0:
             continue
         digits.append(digit)

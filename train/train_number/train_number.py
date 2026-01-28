@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn
 from torchvision.transforms import functional as F
 
@@ -187,7 +188,8 @@ def train(
     model.train()
     for epoch in range(epochs):
         epoch_loss = 0.0
-        for images, targets in data_loader:
+        progress = tqdm(data_loader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch")
+        for images, targets in progress:
             images = [img.to(device) for img in images]
             targets = [{k: v.to(device) for k, v in target.items()} for target in targets]
             loss_dict = model(images, targets)
@@ -196,6 +198,8 @@ def train(
             losses.backward()
             optimizer.step()
             epoch_loss += losses.item()
+            progress.set_postfix(loss=f"{losses.item():.4f}")
+        progress.close()
         print(f"Epoch {epoch + 1}/{epochs} Loss: {epoch_loss / len(data_loader):.4f}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -211,7 +215,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("train/train_number/generated"), help="生成数据输出目录.")
     parser.add_argument("--num-samples", type=int, default=5000, help="生成的训练样本数量.")
     parser.add_argument("--height", type=int, default=64, help="数字拼接后的目标高度.")
-    parser.add_argument("--spacing", type=int, default=4, help="数字之间的间距.")
+    parser.add_argument("--spacing", type=int, default=0, help="数字之间的间距.")
     parser.add_argument("--epochs", type=int, default=10, help="训练轮数.")
     parser.add_argument("--batch", type=int, default=4, help="Batch size.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="训练设备.")

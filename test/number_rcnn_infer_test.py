@@ -9,7 +9,7 @@ import torch
 from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn
 from torchvision.transforms import functional as F
 
-from test.number_roi_from_video_test import NUMBER_REGIONS, iter_videos
+from number_roi_from_video_test import NUMBER_REGIONS, iter_videos
 
 
 def load_label_map(path: Path) -> dict[int, str]:
@@ -59,16 +59,16 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=Path,
-        default=Path("train/train_number/generated/number_rcnn.pt"),
+        default=Path("number_rcnn.pt"),
         help="模型权重路径.",
     )
     parser.add_argument(
         "--labels",
         type=Path,
-        default=Path("train/train_number/generated/label_map.json"),
+        default=Path("../train/train_number/generated/label_map.json"),
         help="label_map.json 路径.",
     )
-    parser.add_argument("--video", type=Path, default=Path("video"), help="视频目录.")
+    parser.add_argument("--video", type=Path, default=Path("../video"), help="视频目录.")
     parser.add_argument("--output", type=Path, default=Path("output/number/infer"), help="输出目录.")
     parser.add_argument("--sample-fps", type=int, default=5, help="采样 FPS.")
     parser.add_argument("--save-interval", type=int, default=100, help="保存调试帧间隔.")
@@ -130,11 +130,18 @@ def main() -> None:
                     cv2.LINE_AA,
                 )
 
+            cv2.imshow("number_rcnn_infer", debug_frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                cap.release()
+                cv2.destroyAllWindows()
+                return
+
             if frame_idx % args.save_interval == 0:
                 out_path = args.output / f"{video.stem}_{frame_idx:06d}.png"
                 cv2.imwrite(str(out_path), debug_frame)
                 print(f"{video.name} 已处理 {frame_idx} 帧")
         cap.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

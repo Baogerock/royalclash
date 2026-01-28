@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import os
 import random
+import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import time
-from io import BytesIO
-
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import ImageGrab
 from ppadb.client import Client as AdbClient
 from ultralytics import YOLO
+
+import win32gui
 
 CARD_REGIONS = [
     ("1", ((157, 34), (292, 197))),
@@ -25,6 +26,9 @@ CARD_REGIONS = [
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
+
+SCRCPY = r"C:\0ShitMountain\royalclash\scrcpy-win64-v3.3.4\scrcpy.exe"
+SCRCPY_TITLE = "LD Stream"
 
 # 参考 test/grid_test.py 的区域划分与网格参数
 REGION2_ROWS = [
@@ -229,9 +233,45 @@ class TapController:
     def tap(self, x: int, y: int) -> None:
         self.device.shell(f"input tap {x} {y}")
 
+
+def start_scrcpy(device_id: str) -> None:
+    subprocess.Popen(
+        [
+            SCRCPY,
+            "-s",
+            device_id,
+            "--no-control",
+            "--max-fps",
+            "60",
+            "--video-bit-rate",
+            "8M",
+            "--window-title",
+            SCRCPY_TITLE,
+        ]
+    )
+    time.sleep(0.5)
+
+
+def get_window_rect(title: str) -> tuple[int, int, int, int] | None:
+    hwnd = win32gui.FindWindow(None, title)
+    if not hwnd:
+        return None
+    left, top = win32gui.ClientToScreen(hwnd, (0, 0))
+    right, bottom = win32gui.ClientToScreen(hwnd, win32gui.GetClientRect(hwnd)[2:4])
+    return left, top, right, bottom
+
+
+class ScrcpyCapture:
+    def __init__(self, device_id: str, window_title: str = SCRCPY_TITLE) -> None:
+        self.window_title = window_title
+        start_scrcpy(device_id)
+
     def screenshot(self) -> np.ndarray:
-        raw = self.device.screencap()
-        image = Image.open(BytesIO(raw)).convert("RGB")
+        rect = get_window_rect(self.window_title)
+        if rect is None:
+            raise RuntimeError(f"未找到窗口: {self.window_title}")
+        left, top, right, bottom = rect
+        image = ImageGrab.grab(bbox=(left, top, right, bottom))
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
 
@@ -331,11 +371,12 @@ def process_frame(
 def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
+    capture = ScrcpyCapture(device_id)
     grid = GridMapper()
     state = BattleState()
 
     while True:
-        frame = tapper.screenshot()
+        frame = capture.screenshot()
         process_frame(frame, classifier, tapper, grid, state)
         time.sleep(interval_s)
 

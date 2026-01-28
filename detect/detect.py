@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytesseract
 from ultralytics import YOLO
 
 from battle_detect import (
@@ -57,6 +58,52 @@ WATER_NAME_MAP = {
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 SHOW_PREVIEW_ENV = False
+
+TOWER_ROIS = {
+    "left": (140, 155, 210, 183),
+    "right": (518, 156, 589, 181),
+}
+
+
+def preprocess_tower_roi(roi: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    scale = 3
+    gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
+    return binary
+
+
+def extract_digits(text: str) -> str:
+    return "".join(ch for ch in text if ch.isdigit())
+
+
+def recognize_tower_digits(binary_roi: np.ndarray) -> str:
+    config = "--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789"
+    text = pytesseract.image_to_string(binary_roi, config=config)
+    digits = extract_digits(text)
+    if digits:
+        return digits
+    inverted = cv2.bitwise_not(binary_roi)
+    text_inverted = pytesseract.image_to_string(inverted, config=config)
+    return extract_digits(text_inverted)
+
+
+def draw_tower_roi(frame: np.ndarray, roi: tuple[int, int, int, int], label: str) -> None:
+    x1, y1, x2, y2 = roi
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+    cv2.putText(
+        frame,
+        label,
+        (x1, max(0, y1 - 6)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 0, 0),
+        2,
+        cv2.LINE_AA,
+    )
 
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:
@@ -192,8 +239,17 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
         top_part = frame[:top_h, :]
         bottom_part = frame[top_h:, :]
 
+        left_roi = TOWER_ROIS["left"]
+        right_roi = TOWER_ROIS["right"]
+        left_crop = frame[left_roi[1] : left_roi[3], left_roi[0] : left_roi[2]]
+        right_crop = frame[right_roi[1] : right_roi[3], right_roi[0] : right_roi[2]]
+        left_digits = recognize_tower_digits(preprocess_tower_roi(left_crop))
+        right_digits = recognize_tower_digits(preprocess_tower_roi(right_crop))
+
         pred = combo.infer(top_part)
         battle_frame = pred.show_box(verbose=False, show_conf=True)
+        draw_tower_roi(battle_frame, left_roi, f"L:{left_digits or '-'}")
+        draw_tower_roi(battle_frame, right_roi, f"R:{right_digits or '-'}")
         detections = pred.get_data()
         elixir_cells = []
         clock_cells = []
@@ -253,6 +309,10 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
             if len(event_lines) > max_event_lines:
                 event_lines = event_lines[-max_event_lines:]
 
+        tower_lines = [
+            f"Left Tower HP: {left_digits or '-'}",
+            f"Right Tower HP: {right_digits or '-'}",
+        ]
         grid_frame = render_grid_frame(
             top_h,
             width,
@@ -260,7 +320,7 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
             cell_by_id,
             grid_lines,
             detections,
-            event_lines=event_lines,
+            event_lines=tower_lines + event_lines,
         )
         if pad_width:
             grid_frame = np.concatenate(

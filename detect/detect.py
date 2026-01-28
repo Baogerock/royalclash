@@ -248,6 +248,7 @@ def process_video(path_video: Path, combo: ComboDetector, classifier: YOLO, outp
 
         pred = combo.infer(top_part)
         battle_frame = pred.show_box(verbose=False, show_conf=True)
+        battle_frame = np.ascontiguousarray(battle_frame)
         draw_tower_roi(battle_frame, left_roi, f"L:{left_digits or '-'}")
         draw_tower_roi(battle_frame, right_roi, f"R:{right_digits or '-'}")
         detections = pred.get_data()

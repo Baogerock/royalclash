@@ -12,14 +12,27 @@ RIGHT_ROI = (518, 156, 589, 181)
 def preprocess_roi(roi: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    scale = 3
+    gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
     return binary
 
 
-def recognize_digits(binary_roi: np.ndarray) -> str:
-    config = "--psm 7 -c tessedit_char_whitelist=0123456789"
-    text = pytesseract.image_to_string(binary_roi, config=config)
+def extract_digits(text: str) -> str:
     return "".join(ch for ch in text if ch.isdigit())
+
+
+def recognize_digits(binary_roi: np.ndarray) -> str:
+    config = "--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789"
+    text = pytesseract.image_to_string(binary_roi, config=config)
+    digits = extract_digits(text)
+    if digits:
+        return digits
+    inverted = cv2.bitwise_not(binary_roi)
+    text_inverted = pytesseract.image_to_string(inverted, config=config)
+    return extract_digits(text_inverted)
 
 
 def draw_roi(frame: np.ndarray, roi: tuple[int, int, int, int], label: str) -> None:

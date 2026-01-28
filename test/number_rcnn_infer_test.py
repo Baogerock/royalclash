@@ -42,13 +42,20 @@ def draw_prediction(frame, roi_offset, prediction, label_map, score_threshold):
     pt1 = (int(x1 + ox), int(y1 + oy))
     pt2 = (int(x2 + ox), int(y2 + oy))
     cv2.rectangle(frame, pt1, pt2, (0, 0, 255), 2)
+    caption = f"{label}:{scores[best_idx]:.2f}"
+    (text_w, text_h), baseline = cv2.getTextSize(caption, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+    text_x = pt1[0]
+    text_y = max(0, pt1[1] - 6)
+    box_pt1 = (text_x, max(0, text_y - text_h - baseline))
+    box_pt2 = (text_x + text_w + 4, text_y + baseline)
+    cv2.rectangle(frame, box_pt1, box_pt2, (0, 0, 255), thickness=-1)
     cv2.putText(
         frame,
-        f"{label}:{scores[best_idx]:.2f}",
-        (pt1[0], max(0, pt1[1] - 6)),
+        caption,
+        (text_x + 2, text_y),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
-        (0, 0, 255),
+        (255, 255, 255),
         1,
         cv2.LINE_AA,
     )

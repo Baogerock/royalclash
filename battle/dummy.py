@@ -230,9 +230,19 @@ class TapController:
         self.device.shell(f"input tap {x} {y}")
 
     def screenshot(self) -> np.ndarray:
-        raw = self.device.screencap()
+        raw = self._screencap_bytes()
         image = Image.open(BytesIO(raw)).convert("RGB")
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    def _screencap_bytes(self) -> bytes:
+        try:
+            return self.device.screencap()
+        except RuntimeError:
+            output = self.device.shell("screencap -p")
+            if isinstance(output, str):
+                output = output.replace("\r\n", "\n")
+                return output.encode("latin1")
+            return bytes(output)
 
 
 def detect_hand_and_water(frame_bottom: np.ndarray, classifier) -> DetectedHand:

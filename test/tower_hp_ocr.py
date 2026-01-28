@@ -40,15 +40,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="公主塔血量识别测试")
     parser.add_argument(
         "--source",
-        default=0,
-        help="视频流来源：摄像头索引(默认0)或视频文件路径",
+        required=True,
+        help="本地视频文件路径",
     )
     args = parser.parse_args()
 
-    source = args.source
-    if isinstance(source, str) and source.isdigit():
-        source = int(source)
-    cap = cv2.VideoCapture(source)
+    source_path = Path(args.source)
+    if not source_path.exists():
+        raise FileNotFoundError(f"视频文件不存在: {source_path}")
+    cap = cv2.VideoCapture(str(source_path))
     if not cap.isOpened():
         raise RuntimeError(f"无法打开视频流: {args.source}")
 

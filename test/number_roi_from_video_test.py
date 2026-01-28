@@ -9,10 +9,10 @@ DUPLICATE_THRESHOLD = 0.95
 VIS_SAMPLE_INTERVAL = 100
 
 NUMBER_REGIONS = [
-    ("top_left", ((137, 153), (211, 187))),
-    ("top_right", ((517, 153), (589, 187))),
-    ("bottom_left", ((142, 790), (204, 824))),
-    ("bottom_right", ((521, 790), (582, 824))),
+    ("top_left", ((140, 162), (211, 192))),
+    ("top_right", ((520, 162), (589, 192))),
+    ("bottom_left", ((142, 790), (204, 820))),
+    ("bottom_right", ((521, 790), (582, 820))),
 ]
 
 

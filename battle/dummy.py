@@ -24,6 +24,8 @@ CARD_REGIONS = [
     ("water", ((196, 193), (257, 238))),
 ]
 
+
+template = cv2.imread('../trophy.png', cv2.IMREAD_COLOR)
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
@@ -116,6 +118,19 @@ BASE_PRIORITY = [
     "07",
 ]
 
+
+def match_template(frame, template, threshold=0.8):
+    if template is None or frame is None:
+        return None
+    h, w = template.shape[:2]
+    if frame.shape[0] < h or frame.shape[1] < w:
+        return None
+    result = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    if max_val >= threshold:
+        x, y = max_loc
+        return x, y, w, h, max_val
+    return None
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:
     (x1, y1), (x2, y2) = region
@@ -377,7 +392,10 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
 
     while True:
         frame = capture.screenshot()
-        process_frame(frame, classifier, tapper, grid, state)
+        roi = frame[0:300, 0:300]
+        found = match_template(roi, template)
+        if found:
+            process_frame(frame, classifier, tapper, grid, state)
         time.sleep(interval_s)
 
 

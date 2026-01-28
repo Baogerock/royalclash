@@ -183,7 +183,7 @@ def train(
     model = fasterrcnn_mobilenet_v3_large_fpn(num_classes=len(label_map) + 1)
     model.to(device)
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.AdamW(params, lr=1e-4, weight_decay=0.0005)
 
     model.train()
     for epoch in range(epochs):
@@ -194,8 +194,12 @@ def train(
             targets = [{k: v.to(device) for k, v in target.items()} for target in targets]
             loss_dict = model(images, targets)
             losses = sum(loss for loss in loss_dict.values())
+            if torch.isnan(losses) or torch.isinf(losses):
+                progress.set_postfix(loss="nan/inf")
+                continue
             optimizer.zero_grad()
             losses.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             epoch_loss += losses.item()
             progress.set_postfix(loss=f"{losses.item():.4f}")

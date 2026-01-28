@@ -6,6 +6,7 @@ import numpy as np
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 SAMPLE_FPS = 5
 DUPLICATE_THRESHOLD = 0.95
+VIS_SAMPLE_INTERVAL = 100
 
 NUMBER_REGIONS = [
     ("top_left", ((137, 153), (211, 187))),
@@ -87,6 +88,8 @@ def is_duplicate(
 
 def build_output_state(output_dir: Path):
     state = {}
+    debug_dir = output_dir / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
     for name, _ in NUMBER_REGIONS:
         region_dir = output_dir / name
         region_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +102,7 @@ def build_output_state(output_dir: Path):
             if sample is not None:
                 samples.append(sample)
         state[name] = {"dir": region_dir, "next_index": next_index, "samples": samples}
+    state["debug_dir"] = debug_dir
     return state
 
 
@@ -112,6 +116,7 @@ def process_video(path_video: Path, output_state):
     sample_stride = max(int(round(fps / SAMPLE_FPS)), 1)
 
     frame_idx = 0
+    debug_dir = output_state["debug_dir"]
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -130,7 +135,22 @@ def process_video(path_video: Path, output_state):
                     state["samples"].append(digit)
                     state["next_index"] += 1
 
-        if frame_idx % 100 == 0:
+        if frame_idx % VIS_SAMPLE_INTERVAL == 0:
+            debug_frame = frame.copy()
+            for name, ((x1, y1), (x2, y2)) in NUMBER_REGIONS:
+                cv2.rectangle(debug_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(
+                    debug_frame,
+                    name,
+                    (x1, max(0, y1 - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+            debug_path = debug_dir / f"{path_video.stem}_{frame_idx:06d}.png"
+            cv2.imwrite(str(debug_path), debug_frame)
             print(f"{path_video.name} 已处理 {frame_idx} 帧")
 
     cap.release()

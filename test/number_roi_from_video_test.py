@@ -5,6 +5,7 @@ import numpy as np
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 SAMPLE_FPS = 5
+DUPLICATE_THRESHOLD = 0.95
 
 NUMBER_REGIONS = [
     ("top_left", ((137, 153), (211, 187))),
@@ -65,6 +66,25 @@ def segment_digits(roi: np.ndarray):
     return digits
 
 
+def is_duplicate(
+    sample: np.ndarray,
+    existing_samples: list[np.ndarray],
+    threshold=DUPLICATE_THRESHOLD,
+):
+    if sample is None or sample.size == 0:
+        return True
+    for existing in existing_samples:
+        if existing is None or existing.size == 0:
+            continue
+        if existing.shape[:2] != sample.shape[:2]:
+            continue
+        result = cv2.matchTemplate(existing, sample, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        if max_val >= threshold:
+            return True
+    return False
+
+
 def build_output_state(output_dir: Path):
     state = {}
     for name, _ in NUMBER_REGIONS:
@@ -73,7 +93,12 @@ def build_output_state(output_dir: Path):
         existing = [p for p in region_dir.iterdir() if p.is_file() and p.suffix.lower() in {".png", ".jpg"}]
         indices = [int(p.stem) for p in existing if p.stem.isdigit()]
         next_index = max(indices, default=0) + 1
-        state[name] = {"dir": region_dir, "next_index": next_index}
+        samples = []
+        for sample_path in existing:
+            sample = cv2.imread(str(sample_path), cv2.IMREAD_COLOR)
+            if sample is not None:
+                samples.append(sample)
+        state[name] = {"dir": region_dir, "next_index": next_index, "samples": samples}
     return state
 
 
@@ -98,8 +123,11 @@ def process_video(path_video: Path, output_state):
                 digits = segment_digits(roi)
                 for digit in digits:
                     state = output_state[name]
+                    if is_duplicate(digit, state["samples"]):
+                        continue
                     sample_path = state["dir"] / f"{state['next_index']:06d}.png"
                     cv2.imwrite(str(sample_path), digit)
+                    state["samples"].append(digit)
                     state["next_index"] += 1
 
         if frame_idx % 100 == 0:

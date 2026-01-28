@@ -1,29 +1,11 @@
 import argparse
-from pathlib import Path
 
 import cv2
 import numpy as np
+import pytesseract
 
 LEFT_ROI = (140, 155, 210, 183)
 RIGHT_ROI = (518, 156, 589, 181)
-
-
-def load_digit_templates(template_dir: Path) -> dict[str, np.ndarray]:
-    templates: dict[str, np.ndarray] = {}
-    for digit in range(10):
-        path = template_dir / f"{digit}.png"
-        if not path.exists():
-            continue
-        img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            continue
-        _, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        templates[str(digit)] = img
-    if not templates:
-        raise FileNotFoundError(
-            f"模板为空：请在 {template_dir} 放置 0.png~9.png 的数字模板图。"
-        )
-    return templates
 
 
 def preprocess_roi(roi: np.ndarray) -> np.ndarray:
@@ -33,37 +15,10 @@ def preprocess_roi(roi: np.ndarray) -> np.ndarray:
     return binary
 
 
-def recognize_digits(binary_roi: np.ndarray, templates: dict[str, np.ndarray]) -> str:
-    contours, _ = cv2.findContours(binary_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    boxes = []
-    h, w = binary_roi.shape
-    for cnt in contours:
-        x, y, bw, bh = cv2.boundingRect(cnt)
-        if bw * bh < 8:
-            continue
-        if bh < h * 0.4:
-            continue
-        boxes.append((x, y, bw, bh))
-
-    boxes.sort(key=lambda b: b[0])
-    if not boxes:
-        return ""
-
-    best_chars = []
-    for x, y, bw, bh in boxes:
-        digit_roi = binary_roi[y : y + bh, x : x + bw]
-        best_digit = ""
-        best_score = -1.0
-        for digit, tmpl in templates.items():
-            resized = cv2.resize(digit_roi, (tmpl.shape[1], tmpl.shape[0]))
-            score = cv2.matchTemplate(resized, tmpl, cv2.TM_CCOEFF_NORMED)[0][0]
-            if score > best_score:
-                best_score = score
-                best_digit = digit
-        if best_digit:
-            best_chars.append(best_digit)
-
-    return "".join(best_chars)
+def recognize_digits(binary_roi: np.ndarray) -> str:
+    config = "--psm 7 -c tessedit_char_whitelist=0123456789"
+    text = pytesseract.image_to_string(binary_roi, config=config)
+    return "".join(ch for ch in text if ch.isdigit())
 
 
 def draw_roi(frame: np.ndarray, roi: tuple[int, int, int, int], label: str) -> None:
@@ -88,15 +43,7 @@ def main() -> None:
         default=0,
         help="视频流来源：摄像头索引(默认0)或视频文件路径",
     )
-    parser.add_argument(
-        "--templates",
-        default="test/tower_digit_templates",
-        help="数字模板目录，包含 0.png~9.png",
-    )
     args = parser.parse_args()
-
-    template_dir = Path(args.templates)
-    templates = load_digit_templates(template_dir)
 
     source = args.source
     if isinstance(source, str) and source.isdigit():
@@ -119,8 +66,8 @@ def main() -> None:
         left_bin = preprocess_roi(left_crop)
         right_bin = preprocess_roi(right_crop)
 
-        left_digits = recognize_digits(left_bin, templates)
-        right_digits = recognize_digits(right_bin, templates)
+        left_digits = recognize_digits(left_bin)
+        right_digits = recognize_digits(right_bin)
 
         print(f"\r左塔: {left_digits or '-'}  右塔: {right_digits or '-'}", end="")
 

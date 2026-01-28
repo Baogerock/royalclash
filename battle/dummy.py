@@ -5,8 +5,12 @@ import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import time
+from io import BytesIO
+
 import cv2
 import numpy as np
+from PIL import Image
 from ppadb.client import Client as AdbClient
 from ultralytics import YOLO
 
@@ -225,6 +229,11 @@ class TapController:
     def tap(self, x: int, y: int) -> None:
         self.device.shell(f"input tap {x} {y}")
 
+    def screenshot(self) -> np.ndarray:
+        raw = self.device.screencap()
+        image = Image.open(BytesIO(raw)).convert("RGB")
+        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
 
 def detect_hand_and_water(frame_bottom: np.ndarray, classifier) -> DetectedHand:
     cards: dict[str, str] = {}
@@ -319,27 +328,25 @@ def process_frame(
     return True
 
 
-def main(video_path: str, device_id: str = "emulator-5556") -> None:
+def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
     grid = GridMapper()
     state = BattleState()
 
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError(f"无法打开视频 {video_path}")
-
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        frame = tapper.screenshot()
         process_frame(frame, classifier, tapper, grid, state)
+        time.sleep(interval_s)
 
 
 if __name__ == "__main__":
     import sys
-    from pathlib import Path
 
-    if len(sys.argv) < 2:
-        raise SystemExit("用法: python battle/dummy.py <video_path>")
-    main(sys.argv[1])
+    interval = 0.2
+    device = "emulator-5556"
+    if len(sys.argv) >= 2:
+        device = sys.argv[1]
+    if len(sys.argv) >= 3:
+        interval = float(sys.argv[2])
+    main(device, interval)

@@ -32,6 +32,11 @@ template = cv2.imread('../trophy.png', cv2.IMREAD_COLOR)
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
+CLASH_ROYALE_PACKAGE = "com.supercell.clashroyale"
+APP_CHECK_INTERVAL_S = 1.5
+APP_TAP_INTERVAL_S = 1.5
+APP_TAP_POINTS = [(267, 1045), (326, 1130)]
+
 # 参考 test/grid_test.py 的区域划分与网格参数
 BASE_REGION2_ROWS = [
     (53, 137.0000, 666, 163.5385),
@@ -301,6 +306,15 @@ class TapController:
     def tap(self, x: int, y: int) -> None:
         self.device.shell(f"input tap {x} {y}")
 
+    def is_app_running(self, package: str) -> bool:
+        output = self.device.shell(f"pidof {package}").strip()
+        return bool(output)
+
+    def launch_app(self, package: str) -> None:
+        self.device.shell(
+            f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
+        )
+
 
 class ScrcpyCapture:
     def __init__(self, device_id: str) -> None:
@@ -434,6 +448,9 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
     capture = ScrcpyCapture(device_id)
     grid: GridMapper | None = None
     state = BattleState()
+    last_app_check = 0.0
+    last_app_tap = 0.0
+    app_tap_index = 0
 
     while True:
         frame = capture.screenshot()
@@ -442,8 +459,23 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
             grid = GridMapper(battle_size)
         roi = frame[0:300, 0:300]
         found = match_template(roi, template)
+        now = time.monotonic()
         if found:
             process_frame(frame, classifier, tapper, grid, state)
+            last_app_check = now
+            last_app_tap = now
+        else:
+            is_running = tapper.is_app_running(CLASH_ROYALE_PACKAGE)
+            if now - last_app_check >= APP_CHECK_INTERVAL_S:
+                last_app_check = now
+                if not is_running:
+                    tapper.launch_app(CLASH_ROYALE_PACKAGE)
+                is_running = True
+            if is_running and now - last_app_tap >= APP_TAP_INTERVAL_S:
+                x, y = APP_TAP_POINTS[app_tap_index % len(APP_TAP_POINTS)]
+                tapper.tap(x, y)
+                app_tap_index += 1
+                last_app_tap = now
         time.sleep(interval_s)
 
 

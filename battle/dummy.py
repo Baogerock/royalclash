@@ -33,7 +33,7 @@ CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
 CLASH_ROYALE_NAME = "部落冲突：皇室战争"
-CLASH_ROYALE_PACKAGE = "com.supercell.clashroyale"
+CLASH_ROYALE_PACKAGE = "com.tencent.tmgp.supercell.clashroyale"
 APP_CHECK_INTERVAL_S = 1.5
 APP_TAP_INTERVAL_S = 1.5
 APP_TAP_POINTS = [(267, 1045), (326, 1130)]

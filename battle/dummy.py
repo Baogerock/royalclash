@@ -342,6 +342,8 @@ class ScrcpyCapture:
         if device is None:
             raise RuntimeError(f"未找到设备 {device_id}")
         self.device = device
+        self.last_adb_capture_at = 0.0
+        self.last_adb_frame: np.ndarray | None = None
         start_scrcpy(device_id)
 
     def screenshot(self) -> np.ndarray:
@@ -353,10 +355,15 @@ class ScrcpyCapture:
                 if right > left and bottom > top:
                     image = ImageGrab.grab(bbox=(left, top, right, bottom))
                     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        now = time.monotonic()
+        if self.last_adb_frame is not None and now - self.last_adb_capture_at < 0.5:
+            return self.last_adb_frame
         screenshot = self.device.screencap()
         frame = cv2.imdecode(np.frombuffer(screenshot, dtype=np.uint8), cv2.IMREAD_COLOR)
         if frame is None:
             raise RuntimeError("ADB 截图失败")
+        self.last_adb_capture_at = now
+        self.last_adb_frame = frame
         return frame
 
 

@@ -253,6 +253,7 @@ class BattleState:
 @dataclass
 class DetectedHand:
     slots: dict[str, str] = field(default_factory=dict)
+    water: int = 0
 
 
 class GridMapper:
@@ -367,19 +368,24 @@ class ScrcpyCapture:
         return frame
 
 
-def detect_hand(
+def detect_hand_and_water(
     frame_bottom: np.ndarray,
     classifier,
     card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
 ) -> DetectedHand:
     cards: dict[str, str] = {}
+    water = 0
     for region_name, coords in card_regions:
         if region_name not in {"1", "2", "3", "4"}:
-            continue
+            if region_name != "water":
+                continue
         crop = crop_region(frame_bottom, coords)
         label = classify_card(crop, classifier)
-        cards[region_name] = label
-    return DetectedHand(slots=cards)
+        if region_name in {"1", "2", "3", "4"}:
+            cards[region_name] = label
+        elif region_name == "water" and label.isdigit():
+            water = max(0, int(label) - 10)
+    return DetectedHand(slots=cards, water=water)
 
 
 def build_priority(state: BattleState) -> list[str]:
@@ -450,12 +456,15 @@ def process_frame(
     top_h = int(height * BATTLE_RATIO)
     bottom_part = frame[top_h:, :]
     card_regions = build_card_regions(frame.shape[1], bottom_part.shape[0])
-    hand = detect_hand(bottom_part, classifier, card_regions)
+    hand = detect_hand_and_water(bottom_part, classifier, card_regions)
 
     selection = select_card(hand, state)
     if selection is None:
         return False
     card_id, slot = selection
+    cost = CARD_COSTS.get(card_id, 99)
+    if hand.water < cost:
+        return False
     target_id = play_card(tapper, grid, slot, card_id, card_regions, top_h)
     print(f"出牌 {card_id} -> 网格 {target_id}")
     update_state_after_play(card_id, state)

@@ -15,7 +15,11 @@ from ultralytics import YOLO
 
 import win32gui
 
-CARD_REGIONS = [
+BASE_WIDTH = 720
+BASE_HEIGHT = 1280
+BASE_BOTTOM_HEIGHT = int(BASE_HEIGHT * 0.2)
+
+BASE_CARD_REGIONS = [
     ("1", ((157, 34), (292, 197))),
     ("2", ((292, 34), (427, 197))),
     ("3", ((428, 34), (562, 197))),
@@ -31,9 +35,10 @@ DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
 SCRCPY = r"C:\0ShitMountain\royalclash\scrcpy-win64-v3.3.4\scrcpy.exe"
 SCRCPY_TITLE = "LD Stream"
+ENABLE_TEMPLATE_GATE = False
 
 # 参考 test/grid_test.py 的区域划分与网格参数
-REGION2_ROWS = [
+BASE_REGION2_ROWS = [
     (53, 137.0000, 666, 163.5385),
     (53, 163.5385, 666, 190.0769),
     (53, 190.0769, 666, 216.6154),
@@ -49,7 +54,7 @@ REGION2_ROWS = [
     (53, 455.4615, 666, 482.0000),
 ]
 
-REGION5_ROWS = [
+BASE_REGION5_ROWS = [
     (53, 586.0000, 666, 615),
     (53, 615, 666, 643),
     (53, 643, 666, 672),
@@ -65,18 +70,18 @@ REGION5_ROWS = [
     (53, 924, 666, 950.0000),
 ]
 
-GRID_REGIONS = [
+BASE_GRID_REGIONS = [
     (258, 112, 461, 137),
-    *REGION2_ROWS,
+    *BASE_REGION2_ROWS,
     (85, 481, 633, 507),
     (120, 506, 221, 559),
     (499, 506, 597, 558),
     (85, 559, 632, 587),
-    *REGION5_ROWS,
+    *BASE_REGION5_ROWS,
     (257, 950, 460, 980),
 ]
 
-GRID_STEP = 34
+GRID_STEP_BASE = 34
 GRID_MIN_CELL_RATIO = 0.5
 
 CARD_COSTS = {
@@ -117,6 +122,39 @@ BASE_PRIORITY = [
     "08",
     "07",
 ]
+
+
+def _scale_card_regions(width: int, bottom_height: int) -> list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]]:
+    x_ratio = width / BASE_WIDTH
+    y_ratio = bottom_height / BASE_BOTTOM_HEIGHT
+    scaled = []
+    for name, ((x1, y1), (x2, y2)) in BASE_CARD_REGIONS:
+        scaled.append(
+            (
+                name,
+                (
+                    (int(round(x1 * x_ratio)), int(round(y1 * y_ratio))),
+                    (int(round(x2 * x_ratio)), int(round(y2 * y_ratio))),
+                ),
+            )
+        )
+    return scaled
+
+
+def _scale_grid_regions(width: int, height: int) -> list[tuple[int, int, int, int]]:
+    x_ratio = width / BASE_WIDTH
+    y_ratio = height / BASE_HEIGHT
+    scaled = []
+    for x0, y0, x1, y1 in BASE_GRID_REGIONS:
+        scaled.append(
+            (
+                int(round(x0 * x_ratio)),
+                int(round(y0 * y_ratio)),
+                int(round(x1 * x_ratio)),
+                int(round(y1 * y_ratio)),
+            )
+        )
+    return scaled
 
 
 def match_template(frame, template, threshold=0.8):
@@ -200,7 +238,15 @@ class DetectedHand:
 
 
 class GridMapper:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        regions: list[tuple[int, int, int, int]],
+        step: int,
+        min_cell_ratio: float,
+    ) -> None:
+        self.regions = regions
+        self.step = step
+        self.min_cell_ratio = min_cell_ratio
         self.centers = self._build_centers()
 
     @staticmethod
@@ -218,9 +264,9 @@ class GridMapper:
     def _build_centers(self) -> dict[int, tuple[int, int]]:
         centers: dict[int, tuple[int, int]] = {}
         cell_id = 0
-        for x0, y0, x1, y1 in GRID_REGIONS:
-            x_lines = self._make_lines_drop_small(x0, x1, GRID_STEP, GRID_MIN_CELL_RATIO)
-            y_lines = self._make_lines_drop_small(y0, y1, GRID_STEP, GRID_MIN_CELL_RATIO)
+        for x0, y0, x1, y1 in self.regions:
+            x_lines = self._make_lines_drop_small(x0, x1, self.step, self.min_cell_ratio)
+            y_lines = self._make_lines_drop_small(y0, y1, self.step, self.min_cell_ratio)
             if len(x_lines) < 2 or len(y_lines) < 2:
                 continue
             for r in range(len(y_lines) - 1):
@@ -244,6 +290,7 @@ class TapController:
         if device is None:
             raise RuntimeError(f"未找到设备 {device_id}")
         self.device = device
+        self.device.shell("settings put system show_touches 1")
 
     def tap(self, x: int, y: int) -> None:
         self.device.shell(f"input tap {x} {y}")
@@ -286,14 +333,25 @@ class ScrcpyCapture:
         if rect is None:
             raise RuntimeError(f"未找到窗口: {self.window_title}")
         left, top, right, bottom = rect
-        image = ImageGrab.grab(bbox=(left, top, right, bottom))
-        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        if right <= left or bottom <= top:
+            raise RuntimeError(f"窗口区域无效: {rect}")
+        for _ in range(3):
+            image = ImageGrab.grab(bbox=(left, top, right, bottom))
+            frame = np.array(image)
+            if frame.size != 0:
+                return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            time.sleep(0.05)
+        raise RuntimeError("截图为空，请确认 scrcpy 窗口未被遮挡或最小化")
 
 
-def detect_hand_and_water(frame_bottom: np.ndarray, classifier) -> DetectedHand:
+def detect_hand_and_water(
+    frame_bottom: np.ndarray,
+    classifier,
+    card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
+) -> DetectedHand:
     cards: dict[str, str] = {}
     water = 0
-    for region_name, coords in CARD_REGIONS:
+    for region_name, coords in card_regions:
         crop = crop_region(frame_bottom, coords)
         label = classify_card(crop, classifier)
         if region_name in {"1", "2", "3", "4"}:
@@ -350,8 +408,9 @@ def play_card(
     grid: GridMapper,
     slot: str,
     card_id: str,
+    card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
 ) -> None:
-    region = next(coords for name, coords in CARD_REGIONS if name == slot)
+    region = next(coords for name, coords in card_regions if name == slot)
     (x1, y1), (x2, y2) = region
     card_x = int((x1 + x2) / 2)
     card_y = int((y1 + y2) / 2)
@@ -368,17 +427,18 @@ def process_frame(
     tapper: TapController,
     grid: GridMapper,
     state: BattleState,
+    card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
 ) -> bool:
     height = frame.shape[0]
     top_h = int(height * 0.8)
     bottom_part = frame[top_h:, :]
-    hand = detect_hand_and_water(bottom_part, classifier)
+    hand = detect_hand_and_water(bottom_part, classifier, card_regions)
 
     selection = select_card(hand, state)
     if selection is None:
         return False
     card_id, slot = selection
-    play_card(tapper, grid, slot, card_id)
+    play_card(tapper, grid, slot, card_id, card_regions)
     update_state_after_play(card_id, state)
     return True
 
@@ -387,15 +447,25 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
     capture = ScrcpyCapture(device_id)
-    grid = GridMapper()
+    grid = None
+    card_regions = None
     state = BattleState()
 
     while True:
         frame = capture.screenshot()
-        roi = frame[0:300, 0:300]
-        found = match_template(roi, template)
-        if found:
-            process_frame(frame, classifier, tapper, grid, state)
+        if grid is None or card_regions is None:
+            height, width = frame.shape[:2]
+            grid_regions = _scale_grid_regions(width, height)
+            grid_step = max(1, int(round(GRID_STEP_BASE * (width / BASE_WIDTH))))
+            grid = GridMapper(grid_regions, grid_step, GRID_MIN_CELL_RATIO)
+            bottom_height = int(height * 0.2)
+            card_regions = _scale_card_regions(width, bottom_height)
+        should_process = True
+        if ENABLE_TEMPLATE_GATE:
+            roi = frame[0:300, 0:300]
+            should_process = match_template(roi, template) is not None
+        if should_process:
+            process_frame(frame, classifier, tapper, grid, state, card_regions)
         time.sleep(interval_s)
 
 

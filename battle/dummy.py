@@ -253,7 +253,6 @@ class BattleState:
 @dataclass
 class DetectedHand:
     slots: dict[str, str] = field(default_factory=dict)
-    water: int = 0
 
 
 class GridMapper:
@@ -338,35 +337,42 @@ def get_window_rect(title: str) -> tuple[int, int, int, int] | None:
 class ScrcpyCapture:
     def __init__(self, device_id: str, window_title: str = SCRCPY_TITLE) -> None:
         self.window_title = window_title
+        client = AdbClient(host="127.0.0.1", port=5037)
+        device = client.device(device_id)
+        if device is None:
+            raise RuntimeError(f"未找到设备 {device_id}")
+        self.device = device
         start_scrcpy(device_id)
 
     def screenshot(self) -> np.ndarray:
         rect = get_window_rect(self.window_title)
-        if rect is None:
-            raise RuntimeError(f"未找到窗口: {self.window_title}")
-        left, top, right, bottom = rect
-        image = ImageGrab.grab(bbox=(left, top, right, bottom))
-        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        if rect is not None:
+            hwnd = win32gui.FindWindow(None, self.window_title)
+            if hwnd and not win32gui.IsIconic(hwnd):
+                left, top, right, bottom = rect
+                if right > left and bottom > top:
+                    image = ImageGrab.grab(bbox=(left, top, right, bottom))
+                    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        screenshot = self.device.screencap()
+        frame = cv2.imdecode(np.frombuffer(screenshot, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise RuntimeError("ADB 截图失败")
+        return frame
 
 
-def detect_hand_and_water(
+def detect_hand(
     frame_bottom: np.ndarray,
     classifier,
     card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
 ) -> DetectedHand:
     cards: dict[str, str] = {}
-    water = 0
     for region_name, coords in card_regions:
+        if region_name not in {"1", "2", "3", "4"}:
+            continue
         crop = crop_region(frame_bottom, coords)
         label = classify_card(crop, classifier)
-        if region_name in {"1", "2", "3", "4"}:
-            cards[region_name] = label
-        elif region_name == "water":
-            if label.isdigit():
-                water = int(label) - 10
-                if water < 0:
-                    water = 0
-    return DetectedHand(slots=cards, water=water)
+        cards[region_name] = label
+    return DetectedHand(slots=cards)
 
 
 def build_priority(state: BattleState) -> list[str]:
@@ -414,7 +420,7 @@ def play_card(
     card_id: str,
     card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
     card_offset_y: int,
-) -> None:
+) -> int:
     region = next(coords for name, coords in card_regions if name == slot)
     (x1, y1), (x2, y2) = region
     card_x = int((x1 + x2) / 2)
@@ -423,6 +429,7 @@ def play_card(
     tapper.tap(card_x, card_y)
     target_x, target_y = grid.get_center(target_id)
     tapper.tap(target_x, target_y)
+    return target_id
 
 
 def process_frame(
@@ -436,17 +443,14 @@ def process_frame(
     top_h = int(height * BATTLE_RATIO)
     bottom_part = frame[top_h:, :]
     card_regions = build_card_regions(frame.shape[1], bottom_part.shape[0])
-    hand = detect_hand_and_water(bottom_part, classifier, card_regions)
-    print(f"圣水量: {hand.water}")
+    hand = detect_hand(bottom_part, classifier, card_regions)
 
     selection = select_card(hand, state)
     if selection is None:
         return False
     card_id, slot = selection
-    cost = CARD_COSTS.get(card_id, 99)
-    if hand.water < cost:
-        return False
-    play_card(tapper, grid, slot, card_id, card_regions, top_h)
+    target_id = play_card(tapper, grid, slot, card_id, card_regions, top_h)
+    print(f"出牌 {card_id} -> 网格 {target_id}")
     update_state_after_play(card_id, state)
     return True
 

@@ -34,6 +34,7 @@ DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
 CLASH_ROYALE_NAME = "部落冲突：皇室战争"
 CLASH_ROYALE_PACKAGE = "com.tencent.tmgp.supercell.clashroyale"
+BLOCKED_PACKAGES = ["com.android.flysilkworm"]
 APP_CHECK_INTERVAL_S = 1.5
 APP_TAP_INTERVAL_S = 1.5
 APP_TAP_POINTS = [(267, 1045), (326, 1130)]
@@ -317,6 +318,11 @@ class TapController:
             f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
         )
 
+    def stop_other_packages(self, allowed_package: str, blocked_packages: list[str]) -> None:
+        for package in blocked_packages:
+            if package != allowed_package:
+                self.device.shell(f"am force-stop {package}")
+
 
 class ScrcpyCapture:
     def __init__(self, device_id: str) -> None:
@@ -454,6 +460,7 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
     last_app_tap = 0.0
     app_tap_index = 0
     in_battle = False
+    last_stop_check = 0.0
 
     while True:
         now = time.monotonic()
@@ -474,6 +481,9 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
             if in_battle:
                 in_battle = False
                 print("对战结束")
+            if now - last_stop_check >= APP_CHECK_INTERVAL_S:
+                last_stop_check = now
+                tapper.stop_other_packages(CLASH_ROYALE_PACKAGE, BLOCKED_PACKAGES)
             is_running = tapper.is_app_running(CLASH_ROYALE_PACKAGE)
             if now - last_app_check >= APP_CHECK_INTERVAL_S:
                 last_app_check = now

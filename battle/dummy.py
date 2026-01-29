@@ -332,8 +332,15 @@ class ScrcpyCapture:
         if rect is None:
             raise RuntimeError(f"未找到窗口: {self.window_title}")
         left, top, right, bottom = rect
-        image = ImageGrab.grab(bbox=(left, top, right, bottom))
-        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        if right <= left or bottom <= top:
+            raise RuntimeError(f"窗口区域无效: {rect}")
+        for _ in range(3):
+            image = ImageGrab.grab(bbox=(left, top, right, bottom))
+            frame = np.array(image)
+            if frame.size != 0:
+                return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            time.sleep(0.05)
+        raise RuntimeError("截图为空，请确认 scrcpy 窗口未被遮挡或最小化")
 
 
 def detect_hand_and_water(

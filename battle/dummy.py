@@ -35,6 +35,7 @@ DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
 SCRCPY = r"C:\0ShitMountain\royalclash\scrcpy-win64-v3.3.4\scrcpy.exe"
 SCRCPY_TITLE = "LD Stream"
+ENABLE_TEMPLATE_GATE = False
 
 # 参考 test/grid_test.py 的区域划分与网格参数
 BASE_REGION2_ROWS = [
@@ -459,9 +460,11 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
             grid = GridMapper(grid_regions, grid_step, GRID_MIN_CELL_RATIO)
             bottom_height = int(height * 0.2)
             card_regions = _scale_card_regions(width, bottom_height)
-        roi = frame[0:300, 0:300]
-        found = match_template(roi, template)
-        if found:
+        should_process = True
+        if ENABLE_TEMPLATE_GATE:
+            roi = frame[0:300, 0:300]
+            should_process = match_template(roi, template) is not None
+        if should_process:
             process_frame(frame, classifier, tapper, grid, state, card_regions)
         time.sleep(interval_s)
 

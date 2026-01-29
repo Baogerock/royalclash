@@ -381,9 +381,6 @@ def select_card(hand: DetectedHand, state: BattleState) -> tuple[str, str] | Non
     for card_id in priority:
         if card_id not in hand.slots.values():
             continue
-        cost = CARD_COSTS.get(card_id, 99)
-        if hand.water < cost:
-            continue
         if card_id == "07" and not state.hogs_played_since_barrel:
             continue
         slot = next(slot for slot, cid in hand.slots.items() if cid == card_id)
@@ -446,6 +443,7 @@ def process_frame(
     card_id, slot = selection
     cost = CARD_COSTS.get(card_id, 99)
     if hand.water < cost:
+        print(f"圣水不足，当前 {hand.water}，需要 {cost}，等待 {card_id}")
         return False
     play_card(tapper, grid, slot, card_id, card_regions, top_h)
     update_state_after_play(card_id, state)

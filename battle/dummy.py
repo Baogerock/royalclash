@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import os
 import random
-import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import ImageGrab
 from ppadb.client import Client as AdbClient
 from ultralytics import YOLO
 
-import win32gui
 
 BASE_FULL_WIDTH = 720
 BASE_FULL_HEIGHT = 1280
@@ -34,9 +31,6 @@ BASE_CARD_REGIONS = [
 template = cv2.imread('../trophy.png', cv2.IMREAD_COLOR)
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
-
-SCRCPY = r"C:\0ShitMountain\royalclash\scrcpy-win64-v3.3.4\scrcpy.exe"
-SCRCPY_TITLE = "LD Stream"
 
 # 参考 test/grid_test.py 的区域划分与网格参数
 BASE_REGION2_ROWS = [
@@ -308,36 +302,8 @@ class TapController:
         self.device.shell(f"input tap {x} {y}")
 
 
-def start_scrcpy(device_id: str) -> None:
-    subprocess.Popen(
-        [
-            SCRCPY,
-            "-s",
-            device_id,
-            "--no-control",
-            "--max-fps",
-            "60",
-            "--video-bit-rate",
-            "8M",
-            "--window-title",
-            SCRCPY_TITLE,
-        ]
-    )
-    time.sleep(0.5)
-
-
-def get_window_rect(title: str) -> tuple[int, int, int, int] | None:
-    hwnd = win32gui.FindWindow(None, title)
-    if not hwnd:
-        return None
-    left, top = win32gui.ClientToScreen(hwnd, (0, 0))
-    right, bottom = win32gui.ClientToScreen(hwnd, win32gui.GetClientRect(hwnd)[2:4])
-    return left, top, right, bottom
-
-
 class ScrcpyCapture:
-    def __init__(self, device_id: str, window_title: str = SCRCPY_TITLE) -> None:
-        self.window_title = window_title
+    def __init__(self, device_id: str) -> None:
         client = AdbClient(host="127.0.0.1", port=5037)
         device = client.device(device_id)
         if device is None:
@@ -345,17 +311,8 @@ class ScrcpyCapture:
         self.device = device
         self.last_adb_capture_at = 0.0
         self.last_adb_frame: np.ndarray | None = None
-        start_scrcpy(device_id)
 
     def screenshot(self) -> np.ndarray:
-        rect = get_window_rect(self.window_title)
-        if rect is not None:
-            hwnd = win32gui.FindWindow(None, self.window_title)
-            if hwnd and not win32gui.IsIconic(hwnd):
-                left, top, right, bottom = rect
-                if right > left and bottom > top:
-                    image = ImageGrab.grab(bbox=(left, top, right, bottom))
-                    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         now = time.monotonic()
         if self.last_adb_frame is not None and now - self.last_adb_capture_at < 0.5:
             return self.last_adb_frame
@@ -471,7 +428,7 @@ def process_frame(
     return True
 
 
-def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
+def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
     capture = ScrcpyCapture(device_id)
@@ -493,7 +450,7 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
 if __name__ == "__main__":
     import sys
 
-    interval = 0.2
+    interval = 0.5
     device = "emulator-5556"
     if len(sys.argv) >= 2:
         device = sys.argv[1]

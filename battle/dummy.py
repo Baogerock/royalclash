@@ -37,6 +37,7 @@ CLASH_ROYALE_PACKAGE = "com.tencent.tmgp.supercell.clashroyale"
 APP_CHECK_INTERVAL_S = 1.5
 APP_TAP_INTERVAL_S = 1.5
 APP_TAP_POINTS = [(267, 1045), (326, 1130)]
+NET_CHECK_INTERVAL_S = 5.0
 
 # 参考 test/grid_test.py 的区域划分与网格参数
 BASE_REGION2_ROWS = [
@@ -317,6 +318,13 @@ class TapController:
             f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
         )
 
+    def force_stop_app(self, package: str) -> None:
+        self.device.shell(f"am force-stop {package}")
+
+    def has_network(self) -> bool:
+        output = self.device.shell("ping -c 4 -W 1 baidu.com")
+        return "0% packet loss" in output
+
 
 class ScrcpyCapture:
     def __init__(self, device_id: str) -> None:
@@ -453,15 +461,25 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
     last_app_check = 0.0
     last_app_tap = 0.0
     app_tap_index = 0
+    last_net_check = 0.0
+    net_ok = True
 
     while True:
+        now = time.monotonic()
+        if now - last_net_check >= NET_CHECK_INTERVAL_S:
+            last_net_check = now
+            net_ok = tapper.has_network()
+            if not net_ok:
+                tapper.force_stop_app(CLASH_ROYALE_PACKAGE)
+        if not net_ok:
+            time.sleep(interval_s)
+            continue
         frame = capture.screenshot()
         battle_size = (frame.shape[1], int(frame.shape[0] * BATTLE_RATIO))
         if grid is None or grid.battle_size != battle_size:
             grid = GridMapper(battle_size)
         roi = frame[0:300, 0:300]
         found = match_template(roi, template)
-        now = time.monotonic()
         if found:
             process_frame(frame, classifier, tapper, grid, state)
             last_app_check = now

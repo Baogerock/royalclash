@@ -15,7 +15,13 @@ from ultralytics import YOLO
 
 import win32gui
 
-CARD_REGIONS = [
+BASE_FULL_WIDTH = 720
+BASE_FULL_HEIGHT = 1280
+BATTLE_RATIO = 0.8
+BASE_BATTLE_HEIGHT = int(BASE_FULL_HEIGHT * BATTLE_RATIO)
+BASE_CARD_HEIGHT = BASE_FULL_HEIGHT - BASE_BATTLE_HEIGHT
+
+BASE_CARD_REGIONS = [
     ("1", ((157, 34), (292, 197))),
     ("2", ((292, 34), (427, 197))),
     ("3", ((428, 34), (562, 197))),
@@ -33,7 +39,7 @@ SCRCPY = r"C:\0ShitMountain\royalclash\scrcpy-win64-v3.3.4\scrcpy.exe"
 SCRCPY_TITLE = "LD Stream"
 
 # 参考 test/grid_test.py 的区域划分与网格参数
-REGION2_ROWS = [
+BASE_REGION2_ROWS = [
     (53, 137.0000, 666, 163.5385),
     (53, 163.5385, 666, 190.0769),
     (53, 190.0769, 666, 216.6154),
@@ -49,7 +55,7 @@ REGION2_ROWS = [
     (53, 455.4615, 666, 482.0000),
 ]
 
-REGION5_ROWS = [
+BASE_REGION5_ROWS = [
     (53, 586.0000, 666, 615),
     (53, 615, 666, 643),
     (53, 643, 666, 672),
@@ -65,14 +71,14 @@ REGION5_ROWS = [
     (53, 924, 666, 950.0000),
 ]
 
-GRID_REGIONS = [
+BASE_GRID_REGIONS = [
     (258, 112, 461, 137),
-    *REGION2_ROWS,
+    *BASE_REGION2_ROWS,
     (85, 481, 633, 507),
     (120, 506, 221, 559),
     (499, 506, 597, 558),
     (85, 559, 632, 587),
-    *REGION5_ROWS,
+    *BASE_REGION5_ROWS,
     (257, 950, 460, 980),
 ]
 
@@ -117,6 +123,57 @@ BASE_PRIORITY = [
     "08",
     "07",
 ]
+
+
+def scale_point(
+    x: float,
+    y: float,
+    src_w: float,
+    src_h: float,
+    dst_w: float,
+    dst_h: float,
+) -> tuple[int, int]:
+    return int(round(x * dst_w / src_w)), int(round(y * dst_h / src_h))
+
+
+def scale_rect(
+    rect: tuple[tuple[int, int], tuple[int, int]],
+    src_w: float,
+    src_h: float,
+    dst_w: float,
+    dst_h: float,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    (x1, y1), (x2, y2) = rect
+    p1 = scale_point(x1, y1, src_w, src_h, dst_w, dst_h)
+    p2 = scale_point(x2, y2, src_w, src_h, dst_w, dst_h)
+    return p1, p2
+
+
+def scale_quad(
+    quad: tuple[float, float, float, float],
+    src_w: float,
+    src_h: float,
+    dst_w: float,
+    dst_h: float,
+) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = quad
+    p0 = scale_point(x0, y0, src_w, src_h, dst_w, dst_h)
+    p1 = scale_point(x1, y1, src_w, src_h, dst_w, dst_h)
+    return p0[0], p0[1], p1[0], p1[1]
+
+
+def build_card_regions(frame_width: int, card_height: int) -> list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]]:
+    regions = []
+    for name, rect in BASE_CARD_REGIONS:
+        regions.append((name, scale_rect(rect, BASE_FULL_WIDTH, BASE_CARD_HEIGHT, frame_width, card_height)))
+    return regions
+
+
+def build_grid_regions(frame_width: int, battle_height: int) -> list[tuple[int, int, int, int]]:
+    return [
+        scale_quad(region, BASE_FULL_WIDTH, BASE_BATTLE_HEIGHT, frame_width, battle_height)
+        for region in BASE_GRID_REGIONS
+    ]
 
 
 def match_template(frame, template, threshold=0.8):
@@ -200,7 +257,9 @@ class DetectedHand:
 
 
 class GridMapper:
-    def __init__(self) -> None:
+    def __init__(self, battle_size: tuple[int, int]) -> None:
+        self.battle_size = battle_size
+        self.regions = build_grid_regions(*battle_size)
         self.centers = self._build_centers()
 
     @staticmethod
@@ -218,7 +277,7 @@ class GridMapper:
     def _build_centers(self) -> dict[int, tuple[int, int]]:
         centers: dict[int, tuple[int, int]] = {}
         cell_id = 0
-        for x0, y0, x1, y1 in GRID_REGIONS:
+        for x0, y0, x1, y1 in self.regions:
             x_lines = self._make_lines_drop_small(x0, x1, GRID_STEP, GRID_MIN_CELL_RATIO)
             y_lines = self._make_lines_drop_small(y0, y1, GRID_STEP, GRID_MIN_CELL_RATIO)
             if len(x_lines) < 2 or len(y_lines) < 2:
@@ -246,6 +305,7 @@ class TapController:
         self.device = device
 
     def tap(self, x: int, y: int) -> None:
+        print(f"点击坐标: ({x}, {y})")
         self.device.shell(f"input tap {x} {y}")
 
 
@@ -290,10 +350,14 @@ class ScrcpyCapture:
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
 
-def detect_hand_and_water(frame_bottom: np.ndarray, classifier) -> DetectedHand:
+def detect_hand_and_water(
+    frame_bottom: np.ndarray,
+    classifier,
+    card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
+) -> DetectedHand:
     cards: dict[str, str] = {}
     water = 0
-    for region_name, coords in CARD_REGIONS:
+    for region_name, coords in card_regions:
         crop = crop_region(frame_bottom, coords)
         label = classify_card(crop, classifier)
         if region_name in {"1", "2", "3", "4"}:
@@ -350,11 +414,13 @@ def play_card(
     grid: GridMapper,
     slot: str,
     card_id: str,
+    card_regions: list[tuple[str, tuple[tuple[int, int], tuple[int, int]]]],
+    card_offset_y: int,
 ) -> None:
-    region = next(coords for name, coords in CARD_REGIONS if name == slot)
+    region = next(coords for name, coords in card_regions if name == slot)
     (x1, y1), (x2, y2) = region
     card_x = int((x1 + x2) / 2)
-    card_y = int((y1 + y2) / 2)
+    card_y = int((y1 + y2) / 2) + card_offset_y
     tapper.tap(card_x, card_y)
 
     target_id = choose_target(card_id)
@@ -370,15 +436,16 @@ def process_frame(
     state: BattleState,
 ) -> bool:
     height = frame.shape[0]
-    top_h = int(height * 0.8)
+    top_h = int(height * BATTLE_RATIO)
     bottom_part = frame[top_h:, :]
-    hand = detect_hand_and_water(bottom_part, classifier)
+    card_regions = build_card_regions(frame.shape[1], bottom_part.shape[0])
+    hand = detect_hand_and_water(bottom_part, classifier, card_regions)
 
     selection = select_card(hand, state)
     if selection is None:
         return False
     card_id, slot = selection
-    play_card(tapper, grid, slot, card_id)
+    play_card(tapper, grid, slot, card_id, card_regions, top_h)
     update_state_after_play(card_id, state)
     return True
 
@@ -387,11 +454,14 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.2) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
     capture = ScrcpyCapture(device_id)
-    grid = GridMapper()
+    grid: GridMapper | None = None
     state = BattleState()
 
     while True:
         frame = capture.screenshot()
+        battle_size = (frame.shape[1], int(frame.shape[0] * BATTLE_RATIO))
+        if grid is None or grid.battle_size != battle_size:
+            grid = GridMapper(battle_size)
         roi = frame[0:300, 0:300]
         found = match_template(roi, template)
         if found:

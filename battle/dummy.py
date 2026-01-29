@@ -305,7 +305,6 @@ class TapController:
         self.device = device
 
     def tap(self, x: int, y: int) -> None:
-        print(f"点击坐标: ({x}, {y})")
         self.device.shell(f"input tap {x} {y}")
 
 
@@ -421,9 +420,9 @@ def play_card(
     (x1, y1), (x2, y2) = region
     card_x = int((x1 + x2) / 2)
     card_y = int((y1 + y2) / 2) + card_offset_y
-    tapper.tap(card_x, card_y)
-
     target_id = choose_target(card_id)
+    print(f"出牌 {card_id} 到网格 {target_id}")
+    tapper.tap(card_x, card_y)
     target_x, target_y = grid.get_center(target_id)
     tapper.tap(target_x, target_y)
 
@@ -445,6 +444,9 @@ def process_frame(
     if selection is None:
         return False
     card_id, slot = selection
+    cost = CARD_COSTS.get(card_id, 99)
+    if hand.water < cost:
+        return False
     play_card(tapper, grid, slot, card_id, card_regions, top_h)
     update_state_after_play(card_id, state)
     return True

@@ -32,6 +32,7 @@ template = cv2.imread('../trophy.png', cv2.IMREAD_COLOR)
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
+CLASH_ROYALE_NAME = "部落冲突：皇室战争"
 CLASH_ROYALE_PACKAGE = "com.supercell.clashroyale"
 APP_CHECK_INTERVAL_S = 1.5
 APP_TAP_INTERVAL_S = 1.5
@@ -311,6 +312,7 @@ class TapController:
         return bool(output)
 
     def launch_app(self, package: str) -> None:
+        print(f"启动 {CLASH_ROYALE_NAME}")
         self.device.shell(
             f"monkey -p {package} -c android.intent.category.LAUNCHER 1"
         )

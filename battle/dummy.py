@@ -249,6 +249,7 @@ class BattleState:
     hogs_played_since_barrel: bool = True
     guards_played: int = 0
     water_sample_saved: bool = False
+    water_box_saved: bool = False
 
 
 @dataclass
@@ -445,6 +446,18 @@ def process_frame(
             if water_crop.size != 0:
                 cv2.imwrite("test_water.png", water_crop)
                 state.water_sample_saved = True
+            if not state.water_box_saved:
+                (wx1, wy1), (wx2, wy2) = water_region
+                frame_copy = frame.copy()
+                cv2.rectangle(
+                    frame_copy,
+                    (int(wx1), int(wy1 + top_h)),
+                    (int(wx2), int(wy2 + top_h)),
+                    (0, 0, 255),
+                    2,
+                )
+                cv2.imwrite("test_water_box.png", frame_copy)
+                state.water_box_saved = True
 
     selection = select_card(hand, state)
     if selection is None:

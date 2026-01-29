@@ -248,6 +248,7 @@ class BattleState:
     fireball_priority: bool = False
     hogs_played_since_barrel: bool = True
     guards_played: int = 0
+    water_sample_saved: bool = False
 
 
 @dataclass
@@ -418,7 +419,6 @@ def play_card(
     card_x = int((x1 + x2) / 2)
     card_y = int((y1 + y2) / 2) + card_offset_y
     target_id = choose_target(card_id)
-    print(f"出牌 {card_id} 到网格 {target_id}")
     tapper.tap(card_x, card_y)
     target_x, target_y = grid.get_center(target_id)
     tapper.tap(target_x, target_y)
@@ -436,6 +436,15 @@ def process_frame(
     bottom_part = frame[top_h:, :]
     card_regions = build_card_regions(frame.shape[1], bottom_part.shape[0])
     hand = detect_hand_and_water(bottom_part, classifier, card_regions)
+    print(f"圣水量: {hand.water}")
+
+    if not state.water_sample_saved:
+        water_region = next((coords for name, coords in card_regions if name == "water"), None)
+        if water_region is not None:
+            water_crop = crop_region(bottom_part, water_region)
+            if water_crop.size != 0:
+                cv2.imwrite("test_water.png", water_crop)
+                state.water_sample_saved = True
 
     selection = select_card(hand, state)
     if selection is None:
@@ -443,7 +452,6 @@ def process_frame(
     card_id, slot = selection
     cost = CARD_COSTS.get(card_id, 99)
     if hand.water < cost:
-        print(f"圣水不足，当前 {hand.water}，需要 {cost}，等待 {card_id}")
         return False
     play_card(tapper, grid, slot, card_id, card_regions, top_h)
     update_state_after_play(card_id, state)

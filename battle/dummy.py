@@ -248,8 +248,6 @@ class BattleState:
     fireball_priority: bool = False
     hogs_played_since_barrel: bool = True
     guards_played: int = 0
-    water_sample_saved: bool = False
-    water_box_saved: bool = False
 
 
 @dataclass
@@ -365,7 +363,9 @@ def detect_hand_and_water(
             cards[region_name] = label
         elif region_name == "water":
             if label.isdigit():
-                water = int(label)
+                water = int(label) - 10
+                if water < 0:
+                    water = 0
     return DetectedHand(slots=cards, water=water)
 
 
@@ -438,26 +438,6 @@ def process_frame(
     card_regions = build_card_regions(frame.shape[1], bottom_part.shape[0])
     hand = detect_hand_and_water(bottom_part, classifier, card_regions)
     print(f"圣水量: {hand.water}")
-
-    if not state.water_sample_saved:
-        water_region = next((coords for name, coords in card_regions if name == "water"), None)
-        if water_region is not None:
-            water_crop = crop_region(bottom_part, water_region)
-            if water_crop.size != 0:
-                cv2.imwrite("test_water.png", water_crop)
-                state.water_sample_saved = True
-            if not state.water_box_saved:
-                (wx1, wy1), (wx2, wy2) = water_region
-                frame_copy = frame.copy()
-                cv2.rectangle(
-                    frame_copy,
-                    (int(wx1), int(wy1 + top_h)),
-                    (int(wx2), int(wy2 + top_h)),
-                    (0, 0, 255),
-                    2,
-                )
-                cv2.imwrite("test_water_box.png", frame_copy)
-                state.water_box_saved = True
 
     selection = select_card(hand, state)
     if selection is None:

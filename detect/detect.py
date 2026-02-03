@@ -56,7 +56,7 @@ WATER_NAME_MAP = {
 
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
-SHOW_PREVIEW_ENV = False
+SHOW_PREVIEW_ENV = True
 
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:

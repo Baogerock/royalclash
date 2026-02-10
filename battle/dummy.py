@@ -27,8 +27,9 @@ BASE_CARD_REGIONS = [
     ("water", ((196, 193), (257, 238))),
 ]
 
+BASE_TROPHY_REGION = ((11, 67), (60, 118))
+TROPHY_CLASS_ID = "21"
 
-template = cv2.imread('../trophy.png', cv2.IMREAD_COLOR)
 CLASSIFIER_MODEL_ENV = "CARD_CLASSIFIER_MODEL"
 DEFAULT_MODEL_PATH = Path("train/train_card/best.pt")
 
@@ -170,25 +171,16 @@ def build_card_regions(frame_width: int, card_height: int) -> list[tuple[str, tu
     return regions
 
 
+def build_trophy_region(frame_width: int, frame_height: int) -> tuple[tuple[int, int], tuple[int, int]]:
+    return scale_rect(BASE_TROPHY_REGION, BASE_FULL_WIDTH, BASE_FULL_HEIGHT, frame_width, frame_height)
+
+
 def build_grid_regions(frame_width: int, battle_height: int) -> list[tuple[int, int, int, int]]:
     return [
         scale_quad(region, BASE_FULL_WIDTH, BASE_BATTLE_HEIGHT, frame_width, battle_height)
         for region in BASE_GRID_REGIONS
     ]
 
-
-def match_template(frame, template, threshold=0.8):
-    if template is None or frame is None:
-        return None
-    h, w = template.shape[:2]
-    if frame.shape[0] < h or frame.shape[1] < w:
-        return None
-    result = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-    if max_val >= threshold:
-        x, y = max_loc
-        return x, y, w, h, max_val
-    return None
 
 def crop_region(frame: np.ndarray, region: tuple[tuple[int, int], tuple[int, int]]) -> np.ndarray:
     (x1, y1), (x2, y2) = region
@@ -450,6 +442,13 @@ def process_frame(
     return True
 
 
+def is_in_battle(frame: np.ndarray, classifier) -> bool:
+    trophy_region = build_trophy_region(frame.shape[1], frame.shape[0])
+    crop = crop_region(frame, trophy_region)
+    label = classify_card(crop, classifier)
+    return label == TROPHY_CLASS_ID
+
+
 def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
     classifier = load_classifier(Path(__file__).resolve().parents[1])
     tapper = TapController(device_id)
@@ -468,9 +467,7 @@ def main(device_id: str = "emulator-5556", interval_s: float = 0.5) -> None:
         battle_size = (frame.shape[1], int(frame.shape[0] * BATTLE_RATIO))
         if grid is None or grid.battle_size != battle_size:
             grid = GridMapper(battle_size)
-        roi = frame[0:300, 0:300]
-        found = match_template(roi, template)
-        if found:
+        if is_in_battle(frame, classifier):
             if not in_battle:
                 in_battle = True
                 print("对战开始")

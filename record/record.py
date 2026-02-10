@@ -9,7 +9,7 @@ from tap_dialog import DEVICE, get_wm_size, TapDialog
 from video_window import start_scrcpy, MarkerOverlay
 
 # 超参配置
-TEMPLATE_CHECK_INTERVAL_MS = 1000  # 模板识别间隔（毫秒）
+TEMPLATE_CHECK_INTERVAL_MS = 1000  # trophy 分类识别间隔（毫秒）
 
 
 def main():

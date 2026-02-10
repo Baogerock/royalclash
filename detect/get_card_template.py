@@ -14,6 +14,10 @@ CARD_REGIONS = [
     ("4", ((562, 34), (697, 197))),
     ("next", ((34, 164), (101, 246))),
     ("water", ((196, 193), (257, 238))),
+]
+
+# trophy 模板来自 output/battle 视频（不是 output/card）
+TROPHY_REGIONS = [
     ("trophy", ((11, 67), (60, 118))),
 ]
 
@@ -67,9 +71,9 @@ def crop_regions(frame: np.ndarray, regions):
     return crops
 
 
-def build_sample_state(pic_dir: Path):
+def build_sample_state(pic_dir: Path, regions):
     sample_state = {}
-    for name, _ in CARD_REGIONS:
+    for name, _ in regions:
         region_dir = pic_dir / name
         region_dir.mkdir(parents=True, exist_ok=True)
         existing_samples = []
@@ -85,7 +89,7 @@ def build_sample_state(pic_dir: Path):
     return sample_state
 
 
-def process_video(path_video: Path, sample_state):
+def process_video(path_video: Path, regions, sample_state):
     cap = cv2.VideoCapture(str(path_video))
     if not cap.isOpened():
         print(f"[WARN] 无法打开视频: {path_video}")
@@ -102,7 +106,7 @@ def process_video(path_video: Path, sample_state):
         frame_idx += 1
 
         if frame_idx % sample_stride == 0:
-            for name, crop in crop_regions(frame, CARD_REGIONS):
+            for name, crop in crop_regions(frame, regions):
                 state = sample_state[name]
                 if is_duplicate(crop, state["samples"]):
                     continue
@@ -115,23 +119,31 @@ def process_video(path_video: Path, sample_state):
             print(f"{path_video.name} 已处理 {frame_idx} 帧")
 
     cap.release()
-    print(f"完成卡牌截图: {path_video.name}")
+    print(f"完成截图: {path_video.name}")
+
+
+def process_video_dir(video_dir: Path, regions, sample_state, tag: str):
+    if not video_dir.exists():
+        print(f"[WARN] {tag} 视频目录不存在: {video_dir}")
+        return
+    videos = iter_videos(video_dir)
+    if not videos:
+        print(f"[WARN] 未找到{tag}视频文件: {video_dir}")
+        return
+    for video in videos:
+        process_video(video, regions, sample_state)
 
 
 if __name__ == "__main__":
     repo_root = Path(__file__).resolve().parents[1]
+
     card_dir = repo_root / "output" / "card"
+    battle_dir = repo_root / "output" / "battle"
     pic_dir = card_dir / "pic"
     pic_dir.mkdir(parents=True, exist_ok=True)
 
-    if not card_dir.exists():
-        raise FileNotFoundError(f"卡牌视频目录不存在: {card_dir}")
+    card_sample_state = build_sample_state(pic_dir, CARD_REGIONS)
+    trophy_sample_state = build_sample_state(pic_dir, TROPHY_REGIONS)
 
-    videos = iter_videos(card_dir)
-    if not videos:
-        print(f"未找到卡牌视频文件: {card_dir}")
-
-    sample_state = build_sample_state(pic_dir)
-
-    for video in videos:
-        process_video(video, sample_state)
+    process_video_dir(card_dir, CARD_REGIONS, card_sample_state, tag="card")
+    process_video_dir(battle_dir, TROPHY_REGIONS, trophy_sample_state, tag="battle")
